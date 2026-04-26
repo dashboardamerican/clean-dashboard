@@ -271,10 +271,13 @@ pub fn calculate_lcoe(
     );
     let cf_depreciation =
         calculate_asset_depreciation(cf_capex_gross, costs.depreciation_method, project_lifetime);
-    // Gas uses 15-year MACRS
+    // Use the configured depreciation method for gas to match the Python reference.
+    // (Real US tax code typically applies 15-year MACRS to gas; if you want that
+    // behavior, switch the default for `depreciation_method` to Macrs15 instead of
+    // hardcoding it here, so the choice stays driven by CostParams.)
     let gas_depreciation = calculate_asset_depreciation(
         gas_capex_gross,
-        DepreciationMethod::Macrs15,
+        costs.depreciation_method,
         project_lifetime,
     );
     let ccs_depreciation = calculate_asset_depreciation(
