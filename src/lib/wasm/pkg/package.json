@@ -1,0 +1,19 @@
+{
+  "name": "energy-simulator",
+  "type": "module",
+  "collaborators": [
+    "Energy Simulator Team"
+  ],
+  "description": "High-performance energy system simulation in Rust/WASM",
+  "version": "0.1.0",
+  "files": [
+    "energy_simulator_bg.wasm",
+    "energy_simulator.js",
+    "energy_simulator.d.ts"
+  ],
+  "main": "energy_simulator.js",
+  "types": "energy_simulator.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
