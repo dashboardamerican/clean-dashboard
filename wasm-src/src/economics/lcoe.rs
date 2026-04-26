@@ -554,17 +554,23 @@ pub fn calculate_lcoe(
     let gas_combustion = fuel_without_ccs * costs.gas_emissions_factor
         + fuel_with_ccs * costs.gas_emissions_factor * (1.0 - ccs_capture_rate);
 
-    // Methane leakage (converted to CO2eq)
+    // Methane leakage (converted to CO2eq).
+    // Python reference uses 19.2 kg CH4 per MMBtu of natural gas (multi_test.py:99).
+    // Methane leakage occurs upstream and is NOT captured by CCS, so it sees the
+    // full fuel volume including the CCS-equipped share.
     let gas_volume = fuel_without_ccs + fuel_with_ccs; // MMBtu
-    let leaked_methane = gas_volume * (costs.gas_leakage_rate / 100.0);
+    const METHANE_KG_PER_MMBTU: f64 = 19.2;
+    let leaked_methane = gas_volume * (costs.gas_leakage_rate / 100.0) * METHANE_KG_PER_MMBTU;
     let methane_emissions = leaked_methane * costs.methane_gwp; // kg CO2eq
 
     // Embodied emissions (amortized over project lifetime)
     let solar_embodied = annual_solar * costs.solar_embodied_emissions / 1000.0; // kg CO2eq per year
     let wind_embodied = annual_wind * costs.wind_embodied_emissions / 1000.0;
     let cf_embodied = annual_clean_firm * costs.clean_firm_embodied_emissions / 1000.0;
-    let battery_embodied =
-        storage_capacity * costs.battery_embodied_emissions / project_lifetime as f64;
+    // storage_capacity is in MWh; battery_embodied_emissions is kg CO2eq per kWh,
+    // so multiply by 1000 to land in kg/year of amortized embodied emissions.
+    let battery_embodied = storage_capacity * 1000.0 * costs.battery_embodied_emissions
+        / project_lifetime as f64;
 
     let total_emissions = gas_combustion
         + methane_emissions

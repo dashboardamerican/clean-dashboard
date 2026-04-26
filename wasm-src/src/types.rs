@@ -314,7 +314,7 @@ impl CostParams {
             clean_firm_embodied_emissions: 11.0,
             battery_embodied_emissions: 100.0,
             gas_leakage_rate: 1.0,
-            methane_gwp: 29.8, // GWP100
+            methane_gwp: 27.2, // IPCC AR6 GWP100 (matches Python reference)
 
             // Land use
             solar_land_direct: 6.5,
