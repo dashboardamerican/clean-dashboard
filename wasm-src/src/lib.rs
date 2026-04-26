@@ -22,6 +22,7 @@ pub use optimizer::{
     is_model_loaded,
     load_model as load_model_internal,
     loaded_models,
+    run_incremental_walk,
     run_v2_accuracy_audit_suite,
     // Model cache exports
     run_v2_adaptive_audit,
@@ -394,6 +395,64 @@ pub fn optimize_with_model(
 
     to_value(&result)
         .map_err(|e| JsError::new(&format!("Failed to serialize optimizer result: {}", e)))
+}
+
+/// Run the incremental cost walk optimizer.
+///
+/// Mirrors the Python `run_incremental_cost_walk` strategy: starts from a zero
+/// portfolio and incrementally adds the most cost-effective resource (smallest
+/// LCOE-per-percentage-point ratio) until reaching the clean-match target,
+/// halving step sizes when overshooting.
+///
+/// # Arguments
+/// * `target_match` - Target clean match percentage (values >= 100 are capped to 99.5)
+/// * `solar_profile` - Solar capacity factors (8760 hours)
+/// * `wind_profile` - Wind capacity factors (8760 hours)
+/// * `load_profile` - Load MW (8760 hours)
+/// * `costs_js` - CostParams as JsValue
+/// * `config_js` - OptimizerConfig as JsValue (provides battery_efficiency,
+///   max_demand_response, and the resource-enable flags)
+/// * `battery_mode` - Battery dispatch mode
+///
+/// # Returns
+/// * IncrementalWalkResult as JsValue (includes the full walk_trace)
+#[wasm_bindgen]
+pub fn run_incremental_walk_wasm(
+    target_match: f64,
+    solar_profile: Vec<f64>,
+    wind_profile: Vec<f64>,
+    load_profile: Vec<f64>,
+    costs_js: JsValue,
+    config_js: JsValue,
+    battery_mode: BatteryMode,
+) -> Result<JsValue, JsError> {
+    let costs: CostParams =
+        from_value(costs_js).map_err(|e| JsError::new(&format!("Failed to parse costs: {}", e)))?;
+    let config: OptimizerConfig = from_value(config_js)
+        .map_err(|e| JsError::new(&format!("Failed to parse optimizer config: {}", e)))?;
+
+    let result = run_incremental_walk(
+        target_match,
+        &solar_profile,
+        &wind_profile,
+        &load_profile,
+        &costs,
+        config.enable_solar,
+        config.enable_wind,
+        config.enable_storage,
+        config.enable_clean_firm,
+        battery_mode,
+        config.battery_efficiency,
+        config.max_demand_response,
+    )
+    .map_err(|e| JsError::new(&e))?;
+
+    to_value(&result).map_err(|e| {
+        JsError::new(&format!(
+            "Failed to serialize incremental walk result: {}",
+            e
+        ))
+    })
 }
 
 /// Run V2 optimizer sweep across multiple targets

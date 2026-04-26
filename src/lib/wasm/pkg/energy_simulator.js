@@ -781,6 +781,195 @@ export const ElccMethod = Object.freeze({
 });
 
 /**
+ * Result of a land-use calculation.
+ */
+export class LandUseResult {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        LandUseResultFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_landuseresult_free(ptr, 0);
+    }
+    /**
+     * @returns {number}
+     */
+    get clean_firm_direct_acres() {
+        const ret = wasm.__wbg_get_landuseresult_clean_firm_direct_acres(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    get clean_firm_total_acres() {
+        const ret = wasm.__wbg_get_landuseresult_clean_firm_total_acres(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Direct (physical-footprint) land use in acres.
+     * @returns {number}
+     */
+    get direct_acres() {
+        const ret = wasm.__wbg_get_landuseresult_direct_acres(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Direct land use in mi² (Python's headline number).
+     * @returns {number}
+     */
+    get direct_mi2() {
+        const ret = wasm.__wbg_get_landuseresult_direct_mi2(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    get gas_direct_acres() {
+        const ret = wasm.__wbg_get_landuseresult_gas_direct_acres(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    get gas_total_acres() {
+        const ret = wasm.__wbg_get_landuseresult_gas_total_acres(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Per-technology direct contributions (acres). Useful for charts.
+     * @returns {number}
+     */
+    get solar_direct_acres() {
+        const ret = wasm.__wbg_get_landuseresult_solar_direct_acres(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Per-technology total contributions (acres).
+     * Solar and gas have no significant indirect footprint, so total == direct
+     * for those two.
+     * @returns {number}
+     */
+    get solar_total_acres() {
+        const ret = wasm.__wbg_get_landuseresult_solar_total_acres(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Total (direct + indirect, e.g. wind spacing) land use in acres.
+     * @returns {number}
+     */
+    get total_acres() {
+        const ret = wasm.__wbg_get_landuseresult_total_acres(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Total land use in mi².
+     * @returns {number}
+     */
+    get total_mi2() {
+        const ret = wasm.__wbg_get_landuseresult_total_mi2(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    get wind_direct_acres() {
+        const ret = wasm.__wbg_get_landuseresult_wind_direct_acres(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
+    get wind_total_acres() {
+        const ret = wasm.__wbg_get_landuseresult_wind_total_acres(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} arg0
+     */
+    set clean_firm_direct_acres(arg0) {
+        wasm.__wbg_set_landuseresult_clean_firm_direct_acres(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @param {number} arg0
+     */
+    set clean_firm_total_acres(arg0) {
+        wasm.__wbg_set_landuseresult_clean_firm_total_acres(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Direct (physical-footprint) land use in acres.
+     * @param {number} arg0
+     */
+    set direct_acres(arg0) {
+        wasm.__wbg_set_landuseresult_direct_acres(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Direct land use in mi² (Python's headline number).
+     * @param {number} arg0
+     */
+    set direct_mi2(arg0) {
+        wasm.__wbg_set_landuseresult_direct_mi2(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @param {number} arg0
+     */
+    set gas_direct_acres(arg0) {
+        wasm.__wbg_set_landuseresult_gas_direct_acres(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @param {number} arg0
+     */
+    set gas_total_acres(arg0) {
+        wasm.__wbg_set_landuseresult_gas_total_acres(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Per-technology direct contributions (acres). Useful for charts.
+     * @param {number} arg0
+     */
+    set solar_direct_acres(arg0) {
+        wasm.__wbg_set_landuseresult_solar_direct_acres(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Per-technology total contributions (acres).
+     * Solar and gas have no significant indirect footprint, so total == direct
+     * for those two.
+     * @param {number} arg0
+     */
+    set solar_total_acres(arg0) {
+        wasm.__wbg_set_landuseresult_solar_total_acres(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Total (direct + indirect, e.g. wind spacing) land use in acres.
+     * @param {number} arg0
+     */
+    set total_acres(arg0) {
+        wasm.__wbg_set_landuseresult_total_acres(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Total land use in mi².
+     * @param {number} arg0
+     */
+    set total_mi2(arg0) {
+        wasm.__wbg_set_landuseresult_total_mi2(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @param {number} arg0
+     */
+    set wind_direct_acres(arg0) {
+        wasm.__wbg_set_landuseresult_wind_direct_acres(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @param {number} arg0
+     */
+    set wind_total_acres(arg0) {
+        wasm.__wbg_set_landuseresult_wind_total_acres(this.__wbg_ptr, arg0);
+    }
+}
+if (Symbol.dispose) LandUseResult.prototype[Symbol.dispose] = LandUseResult.prototype.free;
+
+/**
  * LCOE calculation result with detailed breakdown
  */
 export class LcoeResult {
@@ -1831,6 +2020,35 @@ export function calculate_elcc_metrics(solar_capacity, wind_capacity, storage_ca
 }
 
 /**
+ * Calculate land use for a portfolio without running the simulation.
+ *
+ * # Arguments
+ * * `solar_capacity` - Solar capacity (MW)
+ * * `wind_capacity` - Wind capacity (MW)
+ * * `clean_firm_capacity` - Clean firm capacity (MW)
+ * * `gas_capacity` - Peak gas capacity needed (MW). Pass the same value
+ *   you would read from `SimulationResult.peak_gas`.
+ * * `costs_js` - CostParams as JsValue
+ *
+ * # Returns
+ * * LandUseResult as JsValue with `direct_acres`, `total_acres`,
+ *   `direct_mi2`, `total_mi2`, plus per-technology breakdowns.
+ * @param {number} solar_capacity
+ * @param {number} wind_capacity
+ * @param {number} clean_firm_capacity
+ * @param {number} gas_capacity
+ * @param {any} costs_js
+ * @returns {any}
+ */
+export function compute_land_use(solar_capacity, wind_capacity, clean_firm_capacity, gas_capacity, costs_js) {
+    const ret = wasm.compute_land_use(solar_capacity, wind_capacity, clean_firm_capacity, gas_capacity, costs_js);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Calculate LCOE for a simulation result
  *
  * # Arguments
@@ -2304,6 +2522,49 @@ export function run_cost_sweep_with_model(zone, target_match, param_name, min_va
 }
 
 /**
+ * Run the incremental cost walk optimizer.
+ *
+ * Mirrors the Python `run_incremental_cost_walk` strategy: starts from a zero
+ * portfolio and incrementally adds the most cost-effective resource (smallest
+ * LCOE-per-percentage-point ratio) until reaching the clean-match target,
+ * halving step sizes when overshooting.
+ *
+ * # Arguments
+ * * `target_match` - Target clean match percentage (values >= 100 are capped to 99.5)
+ * * `solar_profile` - Solar capacity factors (8760 hours)
+ * * `wind_profile` - Wind capacity factors (8760 hours)
+ * * `load_profile` - Load MW (8760 hours)
+ * * `costs_js` - CostParams as JsValue
+ * * `config_js` - OptimizerConfig as JsValue (provides battery_efficiency,
+ *   max_demand_response, and the resource-enable flags)
+ * * `battery_mode` - Battery dispatch mode
+ *
+ * # Returns
+ * * IncrementalWalkResult as JsValue (includes the full walk_trace)
+ * @param {number} target_match
+ * @param {Float64Array} solar_profile
+ * @param {Float64Array} wind_profile
+ * @param {Float64Array} load_profile
+ * @param {any} costs_js
+ * @param {any} config_js
+ * @param {BatteryMode} battery_mode
+ * @returns {any}
+ */
+export function run_incremental_walk_wasm(target_match, solar_profile, wind_profile, load_profile, costs_js, config_js, battery_mode) {
+    const ptr0 = passArrayF64ToWasm0(solar_profile, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArrayF64ToWasm0(wind_profile, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passArrayF64ToWasm0(load_profile, wasm.__wbindgen_malloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.run_incremental_walk_wasm(target_match, ptr0, len0, ptr1, len1, ptr2, len2, costs_js, config_js, battery_mode);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Run optimizer sweep and return structured result (uses V2 optimizer)
  * @param {Float64Array} targets
  * @param {Float64Array} solar_profile
@@ -2725,6 +2986,9 @@ function __wbg_get_imports() {
 const CostParamsFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_costparams_free(ptr >>> 0, 1));
+const LandUseResultFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_landuseresult_free(ptr >>> 0, 1));
 const LcoeResultFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_lcoeresult_free(ptr >>> 0, 1));

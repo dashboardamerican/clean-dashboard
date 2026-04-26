@@ -217,13 +217,37 @@ export function requiresPricingCalculation(selectedMetrics: string[]): boolean {
   });
 }
 
-// GHG intensity color scale (7 bands from green to brown)
+// GHG intensity color scale (7 bands from green to brown).
+// Boundaries match Python's `get_emissions_color` in multi_test.py:131
+// exactly: a value of 25 g/kWh maps to the second band (#81BA68), 500 to
+// the last band (#4E2912), etc. The Python reference uses `>=` thresholds,
+// so we use strict `<` here to keep boundary values identical.
 export function getGhgColor(intensity: number): string {
-  if (intensity <= 25) return '#6BAF68';  // deep green
-  if (intensity <= 75) return '#81BA68';
-  if (intensity <= 150) return '#BED853';
-  if (intensity <= 300) return '#C3D768';
-  if (intensity <= 400) return '#DFC85D';
-  if (intensity <= 500) return '#90492F';
-  return '#4E2912';  // dark brown
+  if (intensity < 25) return '#6BAF68';   // 0–25:  deep green
+  if (intensity < 75) return '#81BA68';   // 25–75
+  if (intensity < 150) return '#BED853';  // 75–150
+  if (intensity < 300) return '#C3D768';  // 150–300
+  if (intensity < 400) return '#DFC85D';  // 300–400
+  if (intensity < 500) return '#90492F';  // 400–500
+  return '#4E2912';                       // ≥500: dark brown
 }
+
+// Snapshot of the Python boundary mapping. Used by the unit test in
+// metrics.test.ts to lock in parity. Anyone changing the thresholds above
+// must update both this constant and the test.
+export const GHG_COLOR_PARITY_FIXTURES: ReadonlyArray<readonly [number, string]> = [
+  [0,    '#6BAF68'],
+  [24.9, '#6BAF68'],
+  [25,   '#81BA68'],
+  [74.9, '#81BA68'],
+  [75,   '#BED853'],
+  [149.9,'#BED853'],
+  [150,  '#C3D768'],
+  [299.9,'#C3D768'],
+  [300,  '#DFC85D'],
+  [399.9,'#DFC85D'],
+  [400,  '#90492F'],
+  [499.9,'#90492F'],
+  [500,  '#4E2912'],
+  [1000, '#4E2912'],
+];

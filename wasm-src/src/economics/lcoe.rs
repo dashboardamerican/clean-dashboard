@@ -563,10 +563,13 @@ pub fn calculate_lcoe(
     let leaked_methane = gas_volume * (costs.gas_leakage_rate / 100.0) * METHANE_KG_PER_MMBTU;
     let methane_emissions = leaked_methane * costs.methane_gwp; // kg CO2eq
 
-    // Embodied emissions (amortized over project lifetime)
-    let solar_embodied = annual_solar * costs.solar_embodied_emissions / 1000.0; // kg CO2eq per year
-    let wind_embodied = annual_wind * costs.wind_embodied_emissions / 1000.0;
-    let cf_embodied = annual_clean_firm * costs.clean_firm_embodied_emissions / 1000.0;
+    // Embodied emissions (annual contribution).
+    // `annual_solar` etc. are in MWh; embodied factors are in g CO2eq per kWh.
+    // MWh × 1000 = kWh, then × (g/kWh) = g, then ÷ 1000 = kg → the 1000s cancel,
+    // so the result in kg per year is simply `annual_MWh * (g/kWh)`.
+    let solar_embodied = annual_solar * costs.solar_embodied_emissions; // kg CO2eq/year
+    let wind_embodied = annual_wind * costs.wind_embodied_emissions;
+    let cf_embodied = annual_clean_firm * costs.clean_firm_embodied_emissions;
     // storage_capacity is in MWh; battery_embodied_emissions is kg CO2eq per kWh,
     // so multiply by 1000 to land in kg/year of amortized embodied emissions.
     let battery_embodied = storage_capacity * 1000.0 * costs.battery_embodied_emissions

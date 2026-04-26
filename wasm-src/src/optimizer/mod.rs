@@ -19,6 +19,7 @@
 pub mod cache;
 pub mod empirical_model;
 pub mod greedy;
+pub mod incremental_walk;
 pub mod model_cache;
 pub mod v2_accuracy_audit;
 pub mod v2_adaptive_audit;
@@ -31,6 +32,7 @@ pub mod v1_adaptive;
 
 pub use cache::EvalCache;
 pub use empirical_model::{EmpiricalModel, GridConfig, Portfolio, TrainingSample};
+pub use incremental_walk::run_incremental_walk;
 pub use model_cache::{clear_models, get_model, is_model_loaded, load_model, loaded_models};
 pub use v2_accuracy_audit::{
     run_v2_accuracy_audit_suite, V2AccuracyAuditCaseReport, V2AccuracyAuditSuiteReport,

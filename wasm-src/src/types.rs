@@ -517,6 +517,70 @@ impl Default for OptimizerResult {
     }
 }
 
+/// One step in an incremental cost walk trace.
+///
+/// Captures the system state after either the baseline evaluation or after a
+/// resource increment is applied. `resource_added` is one of:
+/// `"baseline"`, `"solar"`, `"wind"`, `"storage"`, `"clean_firm"`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WalkStep {
+    /// Achieved clean match percentage (0-100)
+    pub match_percentage: f64,
+    /// LCOE at this step ($/MWh)
+    pub lcoe: f64,
+    /// LCOE premium over baseline LCOE ($/MWh)
+    pub lcoe_premium: f64,
+    /// Resource added at this step ("baseline" for first entry)
+    pub resource_added: String,
+    /// Cumulative solar capacity (MW)
+    pub solar_capacity: f64,
+    /// Cumulative wind capacity (MW)
+    pub wind_capacity: f64,
+    /// Cumulative storage capacity (MWh)
+    pub storage_capacity: f64,
+    /// Cumulative clean firm capacity (MW)
+    pub clean_firm_capacity: f64,
+}
+
+/// Result of `run_incremental_walk`.
+///
+/// Mirrors the Python `run_incremental_cost_walk` return dictionary while also
+/// recording the full walk trace as structured `WalkStep` entries.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct IncrementalWalkResult {
+    /// Final solar capacity (MW)
+    pub solar_capacity: f64,
+    /// Final wind capacity (MW)
+    pub wind_capacity: f64,
+    /// Final storage capacity (MWh)
+    pub storage_capacity: f64,
+    /// Final clean firm capacity (MW)
+    pub clean_firm_capacity: f64,
+    /// LCOE for the final portfolio ($/MWh)
+    pub final_lcoe: f64,
+    /// Achieved clean match (%) for the final portfolio
+    pub achieved_match: f64,
+    /// Number of accepted steps (excluding baseline)
+    pub steps: u32,
+    /// Walk trace, including baseline entry at index 0
+    pub walk_trace: Vec<WalkStep>,
+}
+
+impl Default for IncrementalWalkResult {
+    fn default() -> Self {
+        Self {
+            solar_capacity: 0.0,
+            wind_capacity: 0.0,
+            storage_capacity: 0.0,
+            clean_firm_capacity: 0.0,
+            final_lcoe: 0.0,
+            achieved_match: 0.0,
+            steps: 0,
+            walk_trace: Vec::new(),
+        }
+    }
+}
+
 /// Zone profile data
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ZoneData {

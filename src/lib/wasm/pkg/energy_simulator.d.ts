@@ -111,6 +111,47 @@ export enum ElccMethod {
 }
 
 /**
+ * Result of a land-use calculation.
+ */
+export class LandUseResult {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    clean_firm_direct_acres: number;
+    clean_firm_total_acres: number;
+    /**
+     * Direct (physical-footprint) land use in acres.
+     */
+    direct_acres: number;
+    /**
+     * Direct land use in mi² (Python's headline number).
+     */
+    direct_mi2: number;
+    gas_direct_acres: number;
+    gas_total_acres: number;
+    /**
+     * Per-technology direct contributions (acres). Useful for charts.
+     */
+    solar_direct_acres: number;
+    /**
+     * Per-technology total contributions (acres).
+     * Solar and gas have no significant indirect footprint, so total == direct
+     * for those two.
+     */
+    solar_total_acres: number;
+    /**
+     * Total (direct + indirect, e.g. wind spacing) land use in acres.
+     */
+    total_acres: number;
+    /**
+     * Total land use in mi².
+     */
+    total_mi2: number;
+    wind_direct_acres: number;
+    wind_total_acres: number;
+}
+
+/**
  * LCOE calculation result with detailed breakdown
  */
 export class LcoeResult {
@@ -430,6 +471,23 @@ export function battery_mode_peak_shaver(): BatteryMode;
 export function calculate_elcc_metrics(solar_capacity: number, wind_capacity: number, storage_capacity: number, clean_firm_capacity: number, solar_profile: Float64Array, wind_profile: Float64Array, load_profile: Float64Array, battery_mode_js: any, battery_efficiency: number, max_demand_response: number): any;
 
 /**
+ * Calculate land use for a portfolio without running the simulation.
+ *
+ * # Arguments
+ * * `solar_capacity` - Solar capacity (MW)
+ * * `wind_capacity` - Wind capacity (MW)
+ * * `clean_firm_capacity` - Clean firm capacity (MW)
+ * * `gas_capacity` - Peak gas capacity needed (MW). Pass the same value
+ *   you would read from `SimulationResult.peak_gas`.
+ * * `costs_js` - CostParams as JsValue
+ *
+ * # Returns
+ * * LandUseResult as JsValue with `direct_acres`, `total_acres`,
+ *   `direct_mi2`, `total_mi2`, plus per-technology breakdowns.
+ */
+export function compute_land_use(solar_capacity: number, wind_capacity: number, clean_firm_capacity: number, gas_capacity: number, costs_js: any): any;
+
+/**
  * Calculate LCOE for a simulation result
  *
  * # Arguments
@@ -648,6 +706,29 @@ export function run_cost_sweep(target_match: number, param_name: string, min_val
  * * CostSweepResult as JsValue
  */
 export function run_cost_sweep_with_model(zone: string, target_match: number, param_name: string, min_value: number, max_value: number, steps: number, solar_profile: Float64Array, wind_profile: Float64Array, load_profile: Float64Array, base_costs_js: any, config_js: any, battery_mode: BatteryMode): any;
+
+/**
+ * Run the incremental cost walk optimizer.
+ *
+ * Mirrors the Python `run_incremental_cost_walk` strategy: starts from a zero
+ * portfolio and incrementally adds the most cost-effective resource (smallest
+ * LCOE-per-percentage-point ratio) until reaching the clean-match target,
+ * halving step sizes when overshooting.
+ *
+ * # Arguments
+ * * `target_match` - Target clean match percentage (values >= 100 are capped to 99.5)
+ * * `solar_profile` - Solar capacity factors (8760 hours)
+ * * `wind_profile` - Wind capacity factors (8760 hours)
+ * * `load_profile` - Load MW (8760 hours)
+ * * `costs_js` - CostParams as JsValue
+ * * `config_js` - OptimizerConfig as JsValue (provides battery_efficiency,
+ *   max_demand_response, and the resource-enable flags)
+ * * `battery_mode` - Battery dispatch mode
+ *
+ * # Returns
+ * * IncrementalWalkResult as JsValue (includes the full walk_trace)
+ */
+export function run_incremental_walk_wasm(target_match: number, solar_profile: Float64Array, wind_profile: Float64Array, load_profile: Float64Array, costs_js: any, config_js: any, battery_mode: BatteryMode): any;
 
 /**
  * Run optimizer sweep and return structured result (uses V2 optimizer)
@@ -976,6 +1057,7 @@ export interface InitOutput {
     readonly battery_mode_hybrid: () => number;
     readonly battery_mode_peak_shaver: () => number;
     readonly calculate_elcc_metrics: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: any, l: number, m: number) => [number, number, number];
+    readonly compute_land_use: (a: number, b: number, c: number, d: number, e: any) => [number, number, number];
     readonly compute_lcoe: (a: any, b: number, c: number, d: number, e: number, f: any) => [number, number, number];
     readonly compute_prices: (a: any, b: any, c: number, d: any, e: number, f: number, g: any, h: any, i: number, j: number, k: number, l: number) => [number, number, number];
     readonly evaluate_batch: (a: any, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: number, j: number) => [number, number, number];
@@ -989,6 +1071,7 @@ export interface InitOutput {
     readonly optimize_with_model: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: any, k: any, l: number) => [number, number, number];
     readonly run_cost_sweep: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: any, n: any, o: number) => [number, number, number];
     readonly run_cost_sweep_with_model: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: any, p: any, q: number) => [number, number, number];
+    readonly run_incremental_walk_wasm: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any, j: number) => [number, number, number];
     readonly run_optimizer_sweep: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: any, j: any, k: number) => [number, number, number];
     readonly simulate: (a: any, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly simulate_and_calculate_lcoe: (a: any, b: number, c: number, d: number, e: number, f: number, g: number, h: any) => [number, number, number];
@@ -999,6 +1082,31 @@ export interface InitOutput {
     readonly init: () => void;
     readonly wasm_clear_models: () => void;
     readonly optimize_v2: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any, j: number) => [number, number, number];
+    readonly __wbg_get_landuseresult_clean_firm_direct_acres: (a: number) => number;
+    readonly __wbg_get_landuseresult_clean_firm_total_acres: (a: number) => number;
+    readonly __wbg_get_landuseresult_direct_acres: (a: number) => number;
+    readonly __wbg_get_landuseresult_direct_mi2: (a: number) => number;
+    readonly __wbg_get_landuseresult_gas_direct_acres: (a: number) => number;
+    readonly __wbg_get_landuseresult_gas_total_acres: (a: number) => number;
+    readonly __wbg_get_landuseresult_solar_direct_acres: (a: number) => number;
+    readonly __wbg_get_landuseresult_solar_total_acres: (a: number) => number;
+    readonly __wbg_get_landuseresult_total_acres: (a: number) => number;
+    readonly __wbg_get_landuseresult_total_mi2: (a: number) => number;
+    readonly __wbg_get_landuseresult_wind_direct_acres: (a: number) => number;
+    readonly __wbg_get_landuseresult_wind_total_acres: (a: number) => number;
+    readonly __wbg_landuseresult_free: (a: number, b: number) => void;
+    readonly __wbg_set_landuseresult_clean_firm_direct_acres: (a: number, b: number) => void;
+    readonly __wbg_set_landuseresult_clean_firm_total_acres: (a: number, b: number) => void;
+    readonly __wbg_set_landuseresult_direct_acres: (a: number, b: number) => void;
+    readonly __wbg_set_landuseresult_direct_mi2: (a: number, b: number) => void;
+    readonly __wbg_set_landuseresult_gas_direct_acres: (a: number, b: number) => void;
+    readonly __wbg_set_landuseresult_gas_total_acres: (a: number, b: number) => void;
+    readonly __wbg_set_landuseresult_solar_direct_acres: (a: number, b: number) => void;
+    readonly __wbg_set_landuseresult_solar_total_acres: (a: number, b: number) => void;
+    readonly __wbg_set_landuseresult_total_acres: (a: number, b: number) => void;
+    readonly __wbg_set_landuseresult_total_mi2: (a: number, b: number) => void;
+    readonly __wbg_set_landuseresult_wind_direct_acres: (a: number, b: number) => void;
+    readonly __wbg_set_landuseresult_wind_total_acres: (a: number, b: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;
