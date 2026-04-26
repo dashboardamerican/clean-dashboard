@@ -1,0 +1,119 @@
+[package]
+name = "energy-simulator"
+version = "0.1.0"
+edition = "2021"
+authors = ["Energy Simulator Team"]
+description = "High-performance energy system simulation in Rust/WASM"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["console_error_panic_hook"]
+native = ["rayon"]  # Enable for native binaries (not WASM)
+experimental-v3 = []
+
+[dependencies]
+wasm-bindgen = "0.2.92"
+js-sys = "0.3.69"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde-wasm-bindgen = "0.6"
+
+# The `console_error_panic_hook` crate provides better debugging of panics
+console_error_panic_hook = { version = "0.1.7", optional = true }
+
+# Parallel processing for native training data generation
+rayon = { version = "1.10", optional = true }
+
+# Binary serialization for lookup tables
+bincode = "1.3"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.42"
+criterion = "0.5"
+
+[[bench]]
+name = "simulation_bench"
+harness = false
+
+[[bin]]
+name = "benchmark"
+path = "src/bin/benchmark.rs"
+
+[[bin]]
+name = "profile_peak_shaver"
+path = "src/bin/profile_peak_shaver.rs"
+
+[[bin]]
+name = "compare_with_python"
+path = "src/bin/compare_with_python.rs"
+
+[[bin]]
+name = "debug_hybrid"
+path = "src/bin/debug_hybrid.rs"
+
+[[bin]]
+name = "generate_training_data"
+path = "src/bin/generate_training_data.rs"
+required-features = ["native"]
+
+[[bin]]
+name = "test_storage_sweep"
+path = "src/bin/test_storage_sweep.rs"
+
+[[bin]]
+name = "test_wind_zero"
+path = "src/bin/test_wind_zero.rs"
+
+[[bin]]
+name = "test_zero_renewables"
+path = "src/bin/test_zero_renewables.rs"
+
+[[bin]]
+name = "verify_hybrid"
+path = "src/bin/verify_hybrid.rs"
+
+[[bin]]
+name = "bench_v2"
+path = "src/bin/bench_v2.rs"
+
+[[bin]]
+name = "bench_v3"
+path = "src/bin/bench_v3.rs"
+required-features = ["experimental-v3"]
+
+[profile.release]
+opt-level = 3
+lto = true
+[[bin]]
+name = "test_high_targets"
+path = "src/bin/test_high_targets.rs"
+
+[[bin]]
+name = "validate_global"
+path = "src/bin/validate_global.rs"
+[[bin]]
+name = "find_wind"
+path = "src/bin/find_wind.rs"
+
+[[bin]]
+name = "bench_model"
+path = "src/bin/bench_model.rs"
+
+[[bin]]
+name = "audit_v2_accuracy"
+path = "src/bin/audit_v2_accuracy.rs"
+
+[[bin]]
+name = "audit_v2_confidence"
+path = "src/bin/audit_v2_confidence.rs"
+
+[[bin]]
+name = "adaptive_audit_v2"
+path = "src/bin/adaptive_audit_v2.rs"
+
+[[bin]]
+name = "v3_compare"
+path = "src/bin/v3_compare.rs"
+required-features = ["experimental-v3"]

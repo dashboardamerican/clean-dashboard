@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-solar: #fbbc05;
+  --color-wind: #4285f4;
+  --color-battery: #34a853;
+  --color-gas: #ea4335;
+  --color-clean-firm: #FF7900;
+  --color-storage: #673ab7;
+  --color-gas-ccs: #009688;
+  --color-dr: #9AA0A6;
+}
+
+body {
+  font-family: 'Google Sans', 'Roboto', sans-serif;
+  background-color: #f5f5f5;
+  margin: 0;
+  padding: 0;
+}
+
+/* Slider styling */
+input[type="range"] {
+  @apply w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  @apply appearance-none w-4 h-4 bg-blue-600 rounded-full cursor-pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+  @apply w-4 h-4 bg-blue-600 rounded-full cursor-pointer border-none;
+}
+
+/* Card styling */
+.card {
+  @apply bg-white rounded-lg shadow-md p-4;
+}
+
+/* Panel styling */
+.panel {
+  @apply bg-white rounded-lg shadow p-4;
+}
+
+/* Button styling */
+.btn {
+  @apply px-4 py-2 rounded font-medium transition-colors;
+}
+
+.btn-primary {
+  @apply bg-blue-600 text-white hover:bg-blue-700;
+}
+
+.btn-secondary {
+  @apply bg-gray-200 text-gray-800 hover:bg-gray-300;
+}
+
+/* Color strip */
+.color-strip {
+  display: flex;
+  height: 4px;
+}
+
+.color-strip > div {
+  flex: 1;
+}

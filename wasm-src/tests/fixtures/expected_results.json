@@ -1,0 +1,97 @@
+{
+  "description": "Expected optimizer results for regression testing",
+  "version": "2.0.0",
+  "generated": "2025-01-25",
+  "cases": [
+    {
+      "name": "california_hybrid_50pct",
+      "zone": "california",
+      "mode": "Hybrid",
+      "target": 50.0,
+      "costs": "default",
+      "expected": {
+        "min_lcoe": 40.0,
+        "max_lcoe": 60.0,
+        "min_clean_match": 49.0,
+        "max_clean_match": 51.0
+      }
+    },
+    {
+      "name": "california_hybrid_80pct",
+      "zone": "california",
+      "mode": "Hybrid",
+      "target": 80.0,
+      "costs": "default",
+      "expected": {
+        "min_lcoe": 50.0,
+        "max_lcoe": 80.0,
+        "min_clean_match": 79.0,
+        "max_clean_match": 81.0
+      }
+    },
+    {
+      "name": "california_hybrid_99pct",
+      "zone": "california",
+      "mode": "Hybrid",
+      "target": 99.0,
+      "costs": "default",
+      "expected": {
+        "min_lcoe": 80.0,
+        "max_lcoe": 150.0,
+        "min_clean_match": 98.0,
+        "max_clean_match": 100.0
+      }
+    },
+    {
+      "name": "texas_hybrid_70pct",
+      "zone": "texas",
+      "mode": "Hybrid",
+      "target": 70.0,
+      "costs": "default",
+      "expected": {
+        "min_lcoe": 45.0,
+        "max_lcoe": 70.0,
+        "min_clean_match": 69.0,
+        "max_clean_match": 71.0
+      }
+    },
+    {
+      "name": "california_cheap_solar_60pct",
+      "zone": "california",
+      "mode": "Hybrid",
+      "target": 60.0,
+      "costs": {
+        "solar_capex": 500.0
+      },
+      "expected": {
+        "min_lcoe": 30.0,
+        "max_lcoe": 50.0,
+        "min_clean_match": 59.0,
+        "max_clean_match": 61.0,
+        "notes": "Should prefer solar due to low cost"
+      }
+    },
+    {
+      "name": "california_high_gas_90pct",
+      "zone": "california",
+      "mode": "Hybrid",
+      "target": 90.0,
+      "costs": {
+        "gas_price": 14.0
+      },
+      "expected": {
+        "min_lcoe": 60.0,
+        "max_lcoe": 100.0,
+        "min_clean_match": 89.0,
+        "max_clean_match": 91.0,
+        "notes": "High gas makes clean energy more competitive"
+      }
+    }
+  ],
+  "notes": [
+    "These are approximate bounds for sanity checking",
+    "Actual optimal values depend on zone profiles and cost parameters",
+    "LCOE is in $/MWh",
+    "clean_match is percentage (0-100)"
+  ]
+}

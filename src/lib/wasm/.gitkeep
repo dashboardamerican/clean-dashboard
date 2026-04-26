@@ -1,0 +1,2 @@
+# WASM package will be built here
+# Run: npm run wasm:build
