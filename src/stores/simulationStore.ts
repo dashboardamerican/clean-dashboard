@@ -28,8 +28,9 @@ async function loadZoneData(zoneName: ZoneName): Promise<{
   }
 
   try {
-    // Fetch zone data from public directory
-    const response = await fetch('/data/zones.json');
+    // Fetch zone data from public directory.
+    // Use Vite's BASE_URL so it works under any GitHub Pages subpath.
+    const response = await fetch(`${import.meta.env.BASE_URL}data/zones.json`);
     if (!response.ok) {
       throw new Error(`Failed to load zone data: ${response.statusText}`);
     }
