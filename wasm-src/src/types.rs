@@ -8,6 +8,10 @@ fn default_battery_efficiency() -> f64 {
     0.85
 }
 
+fn default_reserve_margin() -> f64 {
+    15.0
+}
+
 /// Battery dispatch mode
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -205,6 +209,15 @@ pub struct CostParams {
     pub monetize_excess_depreciation: bool, // Enable depreciation monetization
     pub monetization_rate: f64,             // % of excess depreciation to monetize
 
+    // Planning reserve margin: built firm capacity in the tightest hour exceeds
+    // the operational peak by this fraction. Scales gas/CF capex, fixed O&M,
+    // depreciation, replacement, and land use. Does NOT affect dispatch — the
+    // 8760-hour gas_generation array stays operational; the reserve is
+    // unused headroom that real planners pay for to absorb forced outages,
+    // load-forecast error, and weather extremes.
+    #[serde(default = "default_reserve_margin")]
+    pub reserve_margin: f64, // % (e.g., 15 for 15%)
+
     // Asset lifetimes
     pub solar_lifetime: u32,
     pub wind_lifetime: u32,
@@ -287,6 +300,9 @@ impl CostParams {
             excess_power_price: 0.0,
             monetize_excess_depreciation: false,
             monetization_rate: 50.0,
+
+            // Planning reserve margin (15% — NERC reference for thermal-dominated)
+            reserve_margin: 15.0,
 
             // Asset lifetimes
             solar_lifetime: 30,
@@ -837,6 +853,9 @@ pub struct SweepPoint {
     pub storage_lcoe: f64,
     pub clean_firm_lcoe: f64,
     pub gas_lcoe: f64,
+    /// Peak gas capacity needed (MW) — read from `SimulationResult.peak_gas`
+    #[serde(default)]
+    pub gas_capacity: f64,
     /// Optimization successful
     pub success: bool,
 }

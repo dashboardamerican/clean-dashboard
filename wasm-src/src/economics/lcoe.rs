@@ -127,16 +127,32 @@ pub fn calculate_lcoe(
     let annual_gas: f64 = sim_result.gas_generation.iter().sum();
     let annual_load = sim_result.annual_load;
     let curtailed_energy = sim_result.total_curtailment;
-    let gas_capacity = sim_result.peak_gas;
+    // Planning reserve margin scales every *firm thermal* resource that has
+    // forced-outage exposure: gas peakers AND clean firm (nuclear,
+    // geothermal). NERC's PRM treats both the same way — you over-build
+    // their nameplate so a tripped unit doesn't blow past the LOLE budget.
+    //
+    // Renewables and storage don't get this multiplier here:
+    //   - Solar/wind reliability discount is implicit in capacity factors
+    //     (their actual delivered MW already shows up in the dispatch)
+    //   - Storage is solid-state with very high availability; ELCC handles
+    //     its capacity contribution separately
+    //
+    // Dispatch (the 8760-hour arrays, annual_clean_firm energy, annual_gas
+    // energy) is untouched — this multiplier only sets the capex basis.
+    let reserve_factor = 1.0 + costs.reserve_margin / 100.0;
+    let gas_capacity = sim_result.peak_gas * reserve_factor;
+    let cf_built_capacity = clean_firm_capacity * reserve_factor;
     let ccs_fraction = (costs.ccs_percentage / 100.0).clamp(0.0, 1.0);
     let ccs_energy_penalty = (costs.ccs_energy_penalty / 100.0).max(0.0);
     let ccs_capture_rate = (costs.ccs_capture_rate / 100.0).clamp(0.0, 1.0);
 
     // === GROSS CAPEX (before ITC) ===
+    // gas_capacity and cf_built_capacity already include the reserve margin.
     let solar_capex_gross = solar_capacity * 1000.0 * costs.solar_capex;
     let wind_capex_gross = wind_capacity * 1000.0 * costs.wind_capex;
     let storage_capex_gross = storage_capacity * 1000.0 * costs.storage_capex;
-    let cf_capex_gross = clean_firm_capacity * 1000.0 * costs.clean_firm_capex;
+    let cf_capex_gross = cf_built_capacity * 1000.0 * costs.clean_firm_capex;
     let gas_capex_gross = gas_capacity * 1000.0 * costs.gas_capex;
     let ccs_capex_gross = gas_capacity * ccs_fraction * 1000.0 * costs.ccs_capex;
 
@@ -214,10 +230,12 @@ pub fn calculate_lcoe(
     let effective_capex = total_capex_after_itc + total_replacement - total_residual;
 
     // === ANNUAL FIXED O&M ===
+    // Fixed O&M scales with built capacity (you maintain every MW you own,
+    // operational or in reserve), so CF and gas use the reserve-scaled values.
     let solar_fixed_om = solar_capacity * 1000.0 * costs.solar_fixed_om;
     let wind_fixed_om = wind_capacity * 1000.0 * costs.wind_fixed_om;
     let storage_fixed_om = storage_capacity * 1000.0 * costs.storage_fixed_om;
-    let cf_fixed_om = clean_firm_capacity * 1000.0 * costs.clean_firm_fixed_om;
+    let cf_fixed_om = cf_built_capacity * 1000.0 * costs.clean_firm_fixed_om;
     let gas_fixed_om = gas_capacity * 1000.0 * costs.gas_fixed_om;
     let ccs_fixed_om = gas_capacity * ccs_fraction * 1000.0 * costs.ccs_fixed_om;
     let total_fixed_om =
@@ -590,10 +608,12 @@ pub fn calculate_lcoe(
     };
 
     // === LAND USE ===
-    // Direct land use (physical footprint only)
+    // Firm thermal resources (gas, CF) use their reserve-scaled built capacity
+    // since the reserve plant takes physical land too. Variable resources
+    // (solar, wind) use nameplate.
     let solar_land_direct = solar_capacity * costs.solar_land_direct;
     let wind_land_direct = wind_capacity * costs.wind_land_direct;
-    let cf_land_direct = clean_firm_capacity * costs.clean_firm_land_direct;
+    let cf_land_direct = cf_built_capacity * costs.clean_firm_land_direct;
     let gas_land_direct = gas_capacity * costs.gas_land_direct;
 
     result.direct_land_use =
@@ -606,7 +626,7 @@ pub fn calculate_lcoe(
     // Gas: only direct (minimal indirect effects)
     let solar_land_total = solar_land_direct;
     let wind_land_total = wind_capacity * costs.wind_land_total;
-    let cf_land_total = clean_firm_capacity * costs.clean_firm_land_total;
+    let cf_land_total = cf_built_capacity * costs.clean_firm_land_total;
     let gas_land_total = gas_land_direct;
 
     result.total_land_use = solar_land_total + wind_land_total + cf_land_total + gas_land_total;
@@ -785,7 +805,9 @@ mod tests {
     #[test]
     fn test_land_use_calculation() {
         let sim_result = create_test_sim_result();
-        let costs = CostParams::default_costs();
+        let mut costs = CostParams::default_costs();
+        // Test pure land-use math; reserve margin is exercised separately.
+        costs.reserve_margin = 0.0;
 
         let lcoe = calculate_lcoe(&sim_result, 100.0, 100.0, 50.0, 10.0, &costs);
 
@@ -800,6 +822,39 @@ mod tests {
         // Total land use: 100 * 6.5 (solar) + 100 * 50.0 (wind total) + 10 * 1.0 (CF total) + 50 * 0.19 (gas)
         let expected_total = 100.0 * 6.5 + 100.0 * 50.0 + 10.0 * 1.0 + 50.0 * 0.19;
         assert!((lcoe.total_land_use - expected_total).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_reserve_margin_scales_firm_thermal() {
+        let sim_result = create_test_sim_result();
+
+        let mut costs_no_reserve = CostParams::default_costs();
+        costs_no_reserve.reserve_margin = 0.0;
+        let mut costs_with_reserve = CostParams::default_costs();
+        costs_with_reserve.reserve_margin = 15.0;
+
+        let no_res = calculate_lcoe(&sim_result, 100.0, 100.0, 50.0, 10.0, &costs_no_reserve);
+        let with_res = calculate_lcoe(&sim_result, 100.0, 100.0, 50.0, 10.0, &costs_with_reserve);
+
+        // Both gas and clean firm are firm-thermal → both scale.
+        assert!(with_res.gas_lcoe > no_res.gas_lcoe);
+        assert!(with_res.clean_firm_lcoe > no_res.clean_firm_lcoe);
+        assert!(with_res.total_lcoe > no_res.total_lcoe);
+
+        // Capex line items scale exactly 1.15× — single-multiplier path.
+        let gas_ratio = with_res.gas_breakdown.capex / no_res.gas_breakdown.capex;
+        let cf_ratio = with_res.clean_firm_breakdown.capex / no_res.clean_firm_breakdown.capex;
+        assert!((gas_ratio - 1.15).abs() < 1e-6, "gas capex 1.15× expected, got {}", gas_ratio);
+        assert!((cf_ratio - 1.15).abs() < 1e-6, "CF capex 1.15× expected, got {}", cf_ratio);
+
+        // Variable resources (solar, wind, storage) are NOT scaled — their
+        // reliability discount lives in capacity factor / ELCC, not here.
+        let solar_ratio = with_res.solar_breakdown.capex / no_res.solar_breakdown.capex;
+        let wind_ratio = with_res.wind_breakdown.capex / no_res.wind_breakdown.capex;
+        let storage_ratio = with_res.storage_breakdown.capex / no_res.storage_breakdown.capex;
+        assert!((solar_ratio - 1.0).abs() < 1e-6);
+        assert!((wind_ratio - 1.0).abs() < 1e-6);
+        assert!((storage_ratio - 1.0).abs() < 1e-6);
     }
 
     #[test]

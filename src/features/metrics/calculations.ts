@@ -9,6 +9,10 @@ import {
 
 export interface CalculatedMetrics {
   // Core
+  // annual_match: clean *generated* (incl. curtailed) / load. Generous —
+  //   matches Python's annual_match. The headline buyer metric.
+  // hourly_match: clean *delivered* to load / load (energy-weighted). Strict —
+  //   matches Python's hourly_match_percent. The 24/7 CFE metric.
   annual_match: number;
   hourly_match: number;
   ghg_intensity: number;
@@ -49,11 +53,33 @@ export function calculateMetrics(
   pricingResult: PricingResult | null = null,
   elccResult: ElccResult | null = null
 ): CalculatedMetrics {
-  // Clean Match % - already calculated in simulation
-  const annual_match = simulation.clean_match_pct;
+  // Annual Match (Python's `annual_match`) — generation-based, generous.
+  // Counts curtailed clean energy as "matched" since you generated it; minus
+  // battery round-trip losses since those don't reach load.
+  //
+  //     annual_match = (annual_renewable_gen + annual_clean_firm
+  //                     - battery_losses) / annual_load × 100
+  //
+  // This is the metric a buyer claiming "100% renewable energy" is usually
+  // citing. Always >= hourly_match; the gap reveals how much over-build
+  // / curtailment is happening.
+  const annual_renewable = simulation.annual_renewable_gen;
+  const annual_clean_firm = config.clean_firm_capacity * simulation.solar_out.length;
+  const battery_throughput = simulation.battery_discharge.reduce((a, b) => a + b, 0);
+  const battery_losses = battery_throughput * (1 - config.battery_efficiency);
+  const net_clean_contribution = annual_renewable + annual_clean_firm - battery_losses;
+  const annual_match = simulation.annual_load > 0
+    ? (net_clean_contribution / simulation.annual_load) * 100
+    : 0;
 
-  // Hourly Match % - percentage of hours where clean_delivered >= load
-  const hourly_match = calculateHourlyMatch(simulation, loadProfile);
+  // Hourly Matched (Python's `hourly_match_percent`) — strict, energy-
+  // weighted. Only counts clean energy that actually served load each hour
+  // (clean_delivered is capped at load[i] in the sim). This is the 24/7
+  // carbon-free-energy metric.
+  //
+  // Equivalent to the simulation's clean_match_pct field — it's already
+  // sum(clean_delivered) / annual_load × 100.
+  const hourly_match = simulation.clean_match_pct;
 
   // GHG Intensity - already in LCOE result
   const ghg_intensity = lcoe.emissions_intensity;
@@ -78,10 +104,14 @@ export function calculateMetrics(
     ? (simulation.annual_load / originalLoad) * 100
     : 100;
 
-  // Gas Capacity Needed (MW) - peak gas generation
-  const gas_capacity = simulation.peak_gas;
+  // Gas Capacity Built (MW) - firm planning capacity = operational peak × (1 + reserve margin).
+  // This is what gets billed in LCOE (capex/fixed OM/depreciation), so the
+  // metric should match the cost basis, not the operational max-hour value.
+  const gas_capacity = simulation.peak_gas * (1 + costs.reserve_margin / 100);
 
-  // Peak Shave (MW) - difference between peak load and peak gas
+  // Peak Shave (MW) - difference between peak load and operational peak gas.
+  // Stays operational: it's a *dispatch* metric ("how much did the battery
+  // shave the worst gas hour"), unrelated to planning reserve.
   const peakLoad = Math.max(...loadProfile);
   const peak_shave = Math.max(0, peakLoad - simulation.peak_gas);
 
@@ -131,29 +161,6 @@ export function calculateMetrics(
     total_land_use,
     elccResult,
   };
-}
-
-/**
- * Calculate hourly match percentage
- * = hours where (renewable + battery discharge) >= load
- */
-function calculateHourlyMatch(
-  simulation: SimulationResult,
-  loadProfile: number[]
-): number {
-  let matchedHours = 0;
-  for (let i = 0; i < loadProfile.length; i++) {
-    const load = loadProfile[i];
-    if (load <= 0.01) continue; // Skip zero-load hours
-
-    const cleanDelivered = simulation.clean_delivered[i];
-    if (cleanDelivered >= load * 0.999) { // 99.9% threshold for rounding
-      matchedHours++;
-    }
-  }
-
-  const totalLoadHours = loadProfile.filter(l => l > 0.01).length;
-  return totalLoadHours > 0 ? (matchedHours / totalLoadHours) * 100 : 0;
 }
 
 /**

@@ -44,12 +44,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     switch (activeTab) {
       case 'capex':
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
-            <Slider label="Solar ($/kW)" value={costs.solar_capex} min={500} max={2000} onChange={(v) => setCost('solar_capex', v)} />
-            <Slider label="Wind ($/kW)" value={costs.wind_capex} min={800} max={2500} onChange={(v) => setCost('wind_capex', v)} />
-            <Slider label="Storage ($/kWh)" value={costs.storage_capex} min={100} max={600} onChange={(v) => setCost('storage_capex', v)} />
-            <Slider label="Clean Firm ($/kW)" value={costs.clean_firm_capex} min={2000} max={10000} step={100} onChange={(v) => setCost('clean_firm_capex', v)} />
-            <Slider label="Gas ($/kW)" value={costs.gas_capex} min={500} max={2000} onChange={(v) => setCost('gas_capex', v)} />
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+              <Slider label="Solar ($/kW)" value={costs.solar_capex} min={500} max={2000} onChange={(v) => setCost('solar_capex', v)} />
+              <Slider label="Wind ($/kW)" value={costs.wind_capex} min={800} max={2500} onChange={(v) => setCost('wind_capex', v)} />
+              <Slider label="Storage ($/kWh)" value={costs.storage_capex} min={100} max={600} onChange={(v) => setCost('storage_capex', v)} />
+              <Slider label="Clean Firm ($/kW)" value={costs.clean_firm_capex} min={2000} max={10000} step={100} onChange={(v) => setCost('clean_firm_capex', v)} />
+              <Slider label="Gas ($/kW)" value={costs.gas_capex} min={500} max={2000} onChange={(v) => setCost('gas_capex', v)} />
+            </div>
+
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-1">Planning Reserve</h4>
+              <p className="text-xs text-gray-500 mb-3">
+                Over-build factor on firm-thermal capacity (gas <em>and</em> clean firm
+                — nuclear, geothermal). Covers forced outages, load forecast
+                error, and weather extremes. NERC reference is ~15%; ERCOT
+                13.75%, California ~18%. Affects capex / fixed O&M / depreciation /
+                land for gas + CF only — dispatch and energy costs are unchanged.
+                Renewables and storage are unaffected (their reliability is
+                already captured in capacity factors and ELCC).
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                <Slider
+                  label="Reserve Margin (%)"
+                  value={costs.reserve_margin}
+                  min={0}
+                  max={30}
+                  step={1}
+                  onChange={(v) => setCost('reserve_margin', v)}
+                />
+              </div>
+            </div>
           </div>
         );
 

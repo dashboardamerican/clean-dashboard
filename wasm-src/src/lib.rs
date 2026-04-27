@@ -11,11 +11,14 @@ pub mod economics;
 pub mod optimizer;
 pub mod simulation;
 pub mod types;
+pub mod zones;
 
 use serde_wasm_bindgen::{from_value, to_value};
 use wasm_bindgen::prelude::*;
 
-pub use economics::{calculate_elcc, calculate_lcoe, compute_hourly_prices};
+pub use economics::{
+    calculate_elcc, calculate_land_use, calculate_lcoe, compute_hourly_prices, LandUseResult,
+};
 pub use optimizer::{
     clear_models,
     get_model,
@@ -186,6 +189,40 @@ pub fn simulate_and_calculate_lcoe(
 
     to_value(&combined)
         .map_err(|e| JsError::new(&format!("Failed to serialize combined result: {}", e)))
+}
+
+/// Calculate land use for a portfolio without running the simulation.
+///
+/// # Arguments
+/// * `solar_capacity` - Solar capacity (MW)
+/// * `wind_capacity` - Wind capacity (MW)
+/// * `clean_firm_capacity` - Clean firm capacity (MW)
+/// * `gas_capacity` - Peak gas capacity needed (MW). Pass the same value
+///   you would read from `SimulationResult.peak_gas`.
+/// * `costs_js` - CostParams as JsValue
+///
+/// # Returns
+/// * LandUseResult as JsValue with `direct_acres`, `total_acres`,
+///   `direct_mi2`, `total_mi2`, plus per-technology breakdowns.
+#[wasm_bindgen]
+pub fn compute_land_use(
+    solar_capacity: f64,
+    wind_capacity: f64,
+    clean_firm_capacity: f64,
+    gas_capacity: f64,
+    costs_js: JsValue,
+) -> Result<JsValue, JsError> {
+    let costs: CostParams =
+        from_value(costs_js).map_err(|e| JsError::new(&format!("Failed to parse costs: {}", e)))?;
+    let result = calculate_land_use(
+        solar_capacity,
+        wind_capacity,
+        clean_firm_capacity,
+        gas_capacity,
+        &costs,
+    );
+    to_value(&result)
+        .map_err(|e| JsError::new(&format!("Failed to serialize land use result: {}", e)))
 }
 
 /// Run the optimizer (V2 hierarchical optimizer)
@@ -562,7 +599,7 @@ pub fn optimize_sweep_with_model(
                     battery_mode,
                 };
 
-                let (solar_lcoe, wind_lcoe, storage_lcoe, clean_firm_lcoe, gas_lcoe) =
+                let (solar_lcoe, wind_lcoe, storage_lcoe, clean_firm_lcoe, gas_lcoe, gas_capacity) =
                     if let Ok(sim_result) =
                         simulate_system(&sim_config, &solar_profile, &wind_profile, &load_profile)
                     {
@@ -580,9 +617,10 @@ pub fn optimize_sweep_with_model(
                             lcoe_result.storage_lcoe,
                             lcoe_result.clean_firm_lcoe,
                             lcoe_result.gas_lcoe,
+                            sim_result.peak_gas * (1.0 + costs.reserve_margin / 100.0),
                         )
                     } else {
-                        (0.0, 0.0, 0.0, 0.0, 0.0)
+                        (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
                     };
 
                 points.push(SweepPoint {
@@ -598,6 +636,7 @@ pub fn optimize_sweep_with_model(
                     storage_lcoe,
                     clean_firm_lcoe,
                     gas_lcoe,
+                    gas_capacity,
                     success: r.success,
                 });
             }
@@ -615,6 +654,7 @@ pub fn optimize_sweep_with_model(
                     storage_lcoe: 0.0,
                     clean_firm_lcoe: 0.0,
                     gas_lcoe: 0.0,
+                    gas_capacity: 0.0,
                     success: false,
                 });
             }
@@ -1214,7 +1254,7 @@ pub fn run_optimizer_sweep(
                     battery_mode,
                 };
 
-                let (solar_lcoe, wind_lcoe, storage_lcoe, clean_firm_lcoe, gas_lcoe) =
+                let (solar_lcoe, wind_lcoe, storage_lcoe, clean_firm_lcoe, gas_lcoe, gas_capacity) =
                     if let Ok(sim_result) =
                         simulate_system(&sim_config, &solar_profile, &wind_profile, &load_profile)
                     {
@@ -1232,9 +1272,10 @@ pub fn run_optimizer_sweep(
                             lcoe_result.storage_lcoe,
                             lcoe_result.clean_firm_lcoe,
                             lcoe_result.gas_lcoe,
+                            sim_result.peak_gas * (1.0 + costs.reserve_margin / 100.0),
                         )
                     } else {
-                        (0.0, 0.0, 0.0, 0.0, 0.0)
+                        (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
                     };
 
                 points.push(SweepPoint {
@@ -1250,6 +1291,7 @@ pub fn run_optimizer_sweep(
                     storage_lcoe,
                     clean_firm_lcoe,
                     gas_lcoe,
+                    gas_capacity,
                     success: r.success,
                 });
             }
@@ -1267,6 +1309,7 @@ pub fn run_optimizer_sweep(
                     storage_lcoe: 0.0,
                     clean_firm_lcoe: 0.0,
                     gas_lcoe: 0.0,
+                    gas_capacity: 0.0,
                     success: false,
                 });
             }

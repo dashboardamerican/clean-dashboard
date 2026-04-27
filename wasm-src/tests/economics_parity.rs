@@ -68,7 +68,9 @@ fn run_simulation(
 fn land_use_california_mixed_portfolio_matches_python() {
     let zone = load_california();
     let sim = run_simulation(&zone, 100.0, 50.0, 0.0, 20.0);
-    let costs = CostParams::default_costs();
+    // Python predates the reserve-margin lever; pin it to 0 to keep parity.
+    let mut costs = CostParams::default_costs();
+    costs.reserve_margin = 0.0;
     let land = calculate_land_use(100.0, 50.0, 20.0, sim.peak_gas, &costs);
 
     // Python output (multi_test.calculate_system_land_use), pinned:

@@ -19,6 +19,7 @@ function App() {
   const runSimulation = useSimulationStore((state) => state.runSimulation)
   const loadInitialZoneData = useSimulationStore((state) => state.loadInitialZoneData)
   const config = useSimulationStore((state) => state.config)
+  const loadType = useSimulationStore((state) => state.loadType)
   const zoneDataLoaded = useSimulationStore((state) => state.zoneDataLoaded)
 
   // Debounce ref for simulation
@@ -43,12 +44,12 @@ function App() {
     }, 50) // 50ms debounce
   }, [runSimulation])
 
-  // Run simulation when WASM is ready, zone data loaded, and config changes
+  // Run simulation when WASM is ready, zone data loaded, and config or load type changes
   useEffect(() => {
     if (wasmModule && !wasmLoading && zoneDataLoaded && !initializing) {
       debouncedRunSimulation()
     }
-  }, [wasmModule, wasmLoading, zoneDataLoaded, initializing, config, debouncedRunSimulation])
+  }, [wasmModule, wasmLoading, zoneDataLoaded, initializing, config, loadType, debouncedRunSimulation])
 
   // Keyboard shortcuts
   useEffect(() => {

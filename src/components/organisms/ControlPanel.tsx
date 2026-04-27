@@ -1,6 +1,6 @@
 import React from 'react';
 import { Slider, Select } from '../atoms';
-import { useSimulationStore } from '../../stores/simulationStore';
+import { useSimulationStore, LoadType } from '../../stores/simulationStore';
 import { BatteryMode, COLORS, ZONE_NAMES } from '../../types';
 
 export const ControlPanel: React.FC = () => {
@@ -8,12 +8,19 @@ export const ControlPanel: React.FC = () => {
   const setConfig = useSimulationStore((state) => state.setConfig);
   const zone = useSimulationStore((state) => state.zone);
   const setZone = useSimulationStore((state) => state.setZone);
+  const loadType = useSimulationStore((state) => state.loadType);
+  const setLoadType = useSimulationStore((state) => state.setLoadType);
   const setBatteryMode = useSimulationStore((state) => state.setBatteryMode);
 
   const batteryModeOptions = [
     { value: BatteryMode.Default, label: 'Default (Water-fill)' },
     { value: BatteryMode.PeakShaver, label: 'Peak Shaver' },
     { value: BatteryMode.Hybrid, label: 'Hybrid' },
+  ];
+
+  const loadTypeOptions = [
+    { value: 'hourly', label: 'Hourly Load (zone profile)' },
+    { value: 'flat', label: 'Flat Load (100 MW constant)' },
   ];
 
   const zoneOptions = ZONE_NAMES.map((z) => ({ value: z, label: z }));
@@ -30,6 +37,14 @@ export const ControlPanel: React.FC = () => {
         value={zone}
         options={zoneOptions}
         onChange={(v) => setZone(v as typeof zone)}
+      />
+
+      {/* Load shape */}
+      <Select
+        label="Load Shape"
+        value={loadType}
+        options={loadTypeOptions}
+        onChange={(v) => setLoadType(v as LoadType)}
       />
 
       {/* Capacity sliders */}

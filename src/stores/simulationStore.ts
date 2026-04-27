@@ -29,7 +29,7 @@ async function loadZoneData(zoneName: ZoneName): Promise<{
 
   try {
     // Fetch zone data from public directory
-    const response = await fetch(`${import.meta.env.BASE_URL}data/zones.json`);
+    const response = await fetch('/data/zones.json');
     if (!response.ok) {
       throw new Error(`Failed to load zone data: ${response.statusText}`);
     }
@@ -87,16 +87,28 @@ function generateSyntheticProfiles(): {
   return { solar, wind, load };
 }
 
+// Mirrors Python's load-type selector. Flat = constant FLAT_LOAD_MW × 8760
+// (matches Python `LOAD = 100.0`). Hourly = zone profile.
+export type LoadType = 'hourly' | 'flat';
+export const FLAT_LOAD_MW = 100;
+
+function deriveLoad(loadType: LoadType, hourlyLoad: number[]): number[] {
+  if (loadType === 'flat') return new Array(hourlyLoad.length).fill(FLAT_LOAD_MW);
+  return hourlyLoad;
+}
+
 interface SimulationState {
   // Configuration
   config: SimulationConfig;
   zone: ZoneName;
   week: number;
+  loadType: LoadType;
 
   // Profile data
   solarProfile: number[];
   windProfile: number[];
-  loadProfile: number[];
+  hourlyLoadProfile: number[]; // raw zone hourly load — always present
+  loadProfile: number[]; // what actually feeds the sim (derived from loadType)
 
   // Results
   simulationResult: SimulationResult | null;
@@ -111,6 +123,7 @@ interface SimulationState {
   setConfig: (config: Partial<SimulationConfig>) => void;
   setZone: (zone: ZoneName) => Promise<void>;
   setWeek: (week: number) => void;
+  setLoadType: (loadType: LoadType) => void;
   setBatteryMode: (mode: BatteryMode) => void;
   runSimulation: () => Promise<void>;
   resetToDefaults: () => void;
@@ -138,8 +151,10 @@ export const useSimulationStore = create<SimulationState>()(
       config: { ...DEFAULT_SIMULATION_CONFIG },
       zone: 'California',
       week: 1,
+      loadType: 'hourly' as LoadType,
       solarProfile: solar,
       windProfile: wind,
+      hourlyLoadProfile: load,
       loadProfile: load,
       simulationResult: null,
       lcoeResult: null,
@@ -158,11 +173,13 @@ export const useSimulationStore = create<SimulationState>()(
         try {
           const zoneData = await loadZoneData(zone);
           const batteryMode = get().config.battery_mode;
+          const loadType = get().loadType;
           set((state) => {
             state.zone = zone;
             state.solarProfile = zoneData.solar;
             state.windProfile = zoneData.wind;
-            state.loadProfile = zoneData.load;
+            state.hourlyLoadProfile = zoneData.load;
+            state.loadProfile = deriveLoad(loadType, zoneData.load);
           });
 
           // Preload model for new zone in background (non-blocking)
@@ -197,7 +214,8 @@ export const useSimulationStore = create<SimulationState>()(
           set((s) => {
             s.solarProfile = zoneData.solar;
             s.windProfile = zoneData.wind;
-            s.loadProfile = zoneData.load;
+            s.hourlyLoadProfile = zoneData.load;
+            s.loadProfile = deriveLoad(s.loadType, zoneData.load);
             s.zoneDataLoaded = true;
           });
 
@@ -214,6 +232,13 @@ export const useSimulationStore = create<SimulationState>()(
       setWeek: (week) => {
         set((state) => {
           state.week = Math.max(1, Math.min(52, week));
+        });
+      },
+
+      setLoadType: (loadType) => {
+        set((state) => {
+          state.loadType = loadType;
+          state.loadProfile = deriveLoad(loadType, state.hourlyLoadProfile);
         });
       },
 

@@ -11,6 +11,8 @@ import { PriceChart } from '../../features/visualization/PriceChart';
 import { GasBaselineChart } from '../../features/visualization/GasBaselineChart';
 import { OptimizerSweepChart } from '../../features/visualization/OptimizerSweepChart';
 import { CostSweepChart } from '../../features/visualization/CostSweepChart';
+import { ResourceSweepChart } from '../../features/visualization/ResourceSweepChart';
+import { CapacitySweepChart } from '../../features/visualization/CapacitySweepChart';
 
 const VISUALIZATION_OPTIONS: { value: VisualizationType; label: string }[] = [
   { value: 'weekly', label: 'Weekly Operation' },
@@ -18,7 +20,9 @@ const VISUALIZATION_OPTIONS: { value: VisualizationType; label: string }[] = [
   { value: 'battery', label: 'Battery Profile' },
   { value: 'lcoe', label: 'LCOE Components' },
   { value: 'price', label: 'Market Price' },
+  { value: 'resourceSweep', label: 'Resource Sweep' },
   { value: 'optimizerSweep', label: 'Optimizer Sweep' },
+  { value: 'capacitySweep', label: 'Capacity Sweep' },
   { value: 'costSweep', label: 'Cost Sensitivity' },
   { value: 'gasBaseline', label: 'Gas Baseline' },
 ];
@@ -37,6 +41,12 @@ export const VisualizationPanel: React.FC = () => {
     }
     if (currentViz === 'costSweep') {
       return <CostSweepChart />;
+    }
+    if (currentViz === 'resourceSweep') {
+      return <ResourceSweepChart />;
+    }
+    if (currentViz === 'capacitySweep') {
+      return <CapacitySweepChart />;
     }
 
     if (!simulationResult) {

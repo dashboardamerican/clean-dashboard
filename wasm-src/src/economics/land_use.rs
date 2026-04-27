@@ -46,8 +46,11 @@ pub struct LandUseResult {
 
 /// Compute land use for a portfolio.
 ///
-/// `gas_capacity_mw` should be the *peak* gas capacity needed by the system,
-/// not annual gas energy. This matches Python's `gas_capacity_needed` input.
+/// `gas_capacity_mw` should be the *operational* peak gas (i.e. what you read
+/// from `SimulationResult.peak_gas`); `clean_firm_capacity_mw` is the
+/// nameplate the user dialed in. The function applies `costs.reserve_margin`
+/// to both firm-thermal resources (gas + clean firm) internally, so the
+/// answer matches what `calculate_lcoe` produces.
 pub fn calculate_land_use(
     solar_capacity_mw: f64,
     wind_capacity_mw: f64,
@@ -55,18 +58,22 @@ pub fn calculate_land_use(
     gas_capacity_mw: f64,
     costs: &CostParams,
 ) -> LandUseResult {
+    let reserve_factor = 1.0 + costs.reserve_margin / 100.0;
+    let firm_gas_mw = gas_capacity_mw * reserve_factor;
+    let firm_cf_mw = clean_firm_capacity_mw * reserve_factor;
+
     let solar_direct = solar_capacity_mw * costs.solar_land_direct;
     let wind_direct = wind_capacity_mw * costs.wind_land_direct;
-    let cf_direct = clean_firm_capacity_mw * costs.clean_firm_land_direct;
-    let gas_direct = gas_capacity_mw * costs.gas_land_direct;
+    let cf_direct = firm_cf_mw * costs.clean_firm_land_direct;
+    let gas_direct = firm_gas_mw * costs.gas_land_direct;
 
     // Solar: only direct (no significant indirect impact)
     // Wind: includes spacing between turbines (wind_land_total >> wind_land_direct)
     // Clean firm: includes exclusion zones, mining footprint
-    // Gas: only direct (negligible indirect)
+    // Gas: only direct (negligible indirect); already reserve-scaled above
     let solar_total = solar_direct;
     let wind_total = wind_capacity_mw * costs.wind_land_total;
-    let cf_total = clean_firm_capacity_mw * costs.clean_firm_land_total;
+    let cf_total = firm_cf_mw * costs.clean_firm_land_total;
     let gas_total = gas_direct;
 
     let direct_acres = solar_direct + wind_direct + cf_direct + gas_direct;
@@ -107,7 +114,10 @@ mod tests {
     ///   total_acres  = 3196.112838811964
     #[test]
     fn matches_python_reference() {
-        let costs = CostParams::default_costs();
+        // Python's `calculate_system_land_use` predates this code's reserve
+        // margin, so we zero it out to compare apples-to-apples.
+        let mut costs = CostParams::default_costs();
+        costs.reserve_margin = 0.0;
         let result = calculate_land_use(100.0, 50.0, 20.0, 137.43599374717837, &costs);
 
         let expected_direct_acres = 758.612838811964;

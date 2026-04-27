@@ -1820,20 +1820,26 @@ fn find_ranked_candidates(
                 // This is the key insight: gas fuel cost is the main differentiator
                 // between portfolios with similar clean_match %.
 
-                // 1. Clean resource capital + fixed O&M (annualized)
+                // 1. Clean resource capital + fixed O&M (annualized).
+                // CF is firm-thermal so its capex/fixed-O&M scale by the
+                // planning-reserve factor — same multiplier applied in
+                // calculate_lcoe so the filter ranking matches the final
+                // LCOE that re-evaluates top candidates.
+                let reserve_factor = 1.0 + costs.reserve_margin / 100.0;
                 let clean_cost = *solar * solar_annual_cost
                     + *wind * wind_annual_cost
                     + *storage * storage_annual_cost
-                    + estimated_cf * cf_annual_cost;
+                    + estimated_cf * cf_annual_cost * reserve_factor;
 
-                // 2. Gas capacity cost (CAPEX + fixed O&M, annualized)
+                // 2. Gas capacity cost (CAPEX + fixed O&M, annualized).
+                // Also reserve-scaled — gas peakers carry the same buffer.
                 let gas_capacity = if has_gas_data {
                     model.predict_gas(*solar, *wind, *storage, estimated_cf)
                 } else {
                     let current_match = model.predict(*solar, *wind, *storage, estimated_cf);
                     100.0 * (1.0 - current_match / 100.0)
                 };
-                let gas_capex_cost = gas_capacity * gas_annual_cost;
+                let gas_capex_cost = gas_capacity * gas_annual_cost * reserve_factor;
 
                 // 3. Gas FUEL cost (this is the big differentiator!)
                 // Gas fuel cost = gas_generation (MWh) * heat_rate (MMBtu/MWh) * gas_price ($/MMBtu)

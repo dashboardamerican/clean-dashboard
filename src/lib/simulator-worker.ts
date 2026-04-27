@@ -50,6 +50,7 @@ interface SweepPoint {
   storage_lcoe: number;
   clean_firm_lcoe: number;
   gas_lcoe: number;
+  gas_capacity: number;
   success: boolean;
 }
 

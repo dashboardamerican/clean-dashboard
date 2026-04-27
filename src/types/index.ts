@@ -80,6 +80,11 @@ export interface CostParams {
   monetize_excess_depreciation: boolean;  // Enable depreciation monetization
   monetization_rate: number;        // % of excess depreciation to monetize (haircut)
 
+  // Planning reserve margin (% — e.g. 15 means built firm capacity exceeds
+  // operational peak by 15%). Scales gas/CF capex and gas land in the LCOE
+  // pipeline. Does not affect dispatch.
+  reserve_margin: number;
+
   // Asset lifetimes
   solar_lifetime: number;
   wind_lifetime: number;
@@ -225,6 +230,7 @@ export const DEFAULT_COSTS: CostParams = {
   excess_power_price: 0,
   monetize_excess_depreciation: false,
   monetization_rate: 50,
+  reserve_margin: 15,
 
   solar_lifetime: 30,
   wind_lifetime: 30,
@@ -330,6 +336,7 @@ export type VisualizationType =
   | 'gasBaseline'
   | 'resourceSweep'
   | 'optimizerSweep'
+  | 'capacitySweep'
   | 'costSweep';
 
 // =============================================================================
@@ -432,6 +439,8 @@ export interface SweepPoint {
   storage_lcoe: number;
   clean_firm_lcoe: number;
   gas_lcoe: number;
+  // Peak gas capacity (MW) — read from SimulationResult.peak_gas
+  gas_capacity: number;
   success: boolean;
 }
 
@@ -470,3 +479,27 @@ export type CostSweepParam =
   | 'storage_itc'
   | 'clean_firm_itc'
   | 'discount_rate';
+
+// =============================================================================
+// Resource Sweep Types
+// =============================================================================
+
+export type ResourceSweepResource = 'solar' | 'wind' | 'storage' | 'clean_firm';
+export type ResourceSweepMetric = 'clean_match' | 'lcoe';
+
+export interface ResourceSweepPoint {
+  capacity: number;
+  clean_match: number;
+  lcoe: number;
+}
+
+export interface ResourceSweepResult {
+  resource: ResourceSweepResource;
+  points: ResourceSweepPoint[];
+  fixed_solar: number;
+  fixed_wind: number;
+  fixed_storage: number;
+  fixed_clean_firm: number;
+  current_value: number;
+  elapsed_ms: number;
+}

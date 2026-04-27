@@ -60,6 +60,7 @@ export class CostParams {
     monetization_rate: number;
     monetize_excess_depreciation: boolean;
     project_lifetime: number;
+    reserve_margin: number;
     solar_capex: number;
     solar_embodied_emissions: number;
     solar_fixed_om: number;
@@ -861,6 +862,7 @@ export interface InitOutput {
     readonly __wbg_get_costparams_monetization_rate: (a: number) => number;
     readonly __wbg_get_costparams_monetize_excess_depreciation: (a: number) => number;
     readonly __wbg_get_costparams_project_lifetime: (a: number) => number;
+    readonly __wbg_get_costparams_reserve_margin: (a: number) => number;
     readonly __wbg_get_costparams_solar_capex: (a: number) => number;
     readonly __wbg_get_costparams_solar_embodied_emissions: (a: number) => number;
     readonly __wbg_get_costparams_solar_fixed_om: (a: number) => number;
@@ -933,6 +935,7 @@ export interface InitOutput {
     readonly __wbg_set_costparams_monetization_rate: (a: number, b: number) => void;
     readonly __wbg_set_costparams_monetize_excess_depreciation: (a: number, b: number) => void;
     readonly __wbg_set_costparams_project_lifetime: (a: number, b: number) => void;
+    readonly __wbg_set_costparams_reserve_margin: (a: number, b: number) => void;
     readonly __wbg_set_costparams_solar_capex: (a: number, b: number) => void;
     readonly __wbg_set_costparams_solar_embodied_emissions: (a: number, b: number) => void;
     readonly __wbg_set_costparams_solar_fixed_om: (a: number, b: number) => void;

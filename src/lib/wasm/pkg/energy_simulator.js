@@ -274,6 +274,13 @@ export class CostParams {
     /**
      * @returns {number}
      */
+    get reserve_margin() {
+        const ret = wasm.__wbg_get_costparams_reserve_margin(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {number}
+     */
     get solar_capex() {
         const ret = wasm.__wbg_get_costparams_solar_capex(this.__wbg_ptr);
         return ret;
@@ -621,6 +628,12 @@ export class CostParams {
      */
     set project_lifetime(arg0) {
         wasm.__wbg_set_costparams_project_lifetime(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @param {number} arg0
+     */
+    set reserve_margin(arg0) {
+        wasm.__wbg_set_costparams_reserve_margin(this.__wbg_ptr, arg0);
     }
     /**
      * @param {number} arg0
