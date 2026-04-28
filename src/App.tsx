@@ -8,6 +8,8 @@ import { VisualizationPanel } from './components/organisms/VisualizationPanel'
 import { SettingsModal } from './features/settings/SettingsModal'
 import { OptimizerModal } from './features/optimizer/OptimizerModal'
 import { MetricsSelectionModal } from './features/metrics'
+import { TutorialOverlay } from './features/tutorial/TutorialOverlay'
+import { useTutorialStore } from './stores/tutorialStore'
 
 function App() {
   const { wasmModule, loading: wasmLoading, error: wasmError } = useWasm()
@@ -50,6 +52,27 @@ function App() {
       debouncedRunSimulation()
     }
   }, [wasmModule, wasmLoading, zoneDataLoaded, initializing, config, loadType, debouncedRunSimulation])
+
+  // Auto-open the tutorial on first visit (after the app finishes loading)
+  useEffect(() => {
+    if (initializing) return
+    const { hasSeenTutorial, openTutorial } = useTutorialStore.getState()
+    if (!hasSeenTutorial) {
+      openTutorial()
+    }
+  }, [initializing])
+
+  // Register tutorial actions so the tour can open/close modals during menu steps
+  useEffect(() => {
+    useTutorialStore.getState().registerActions({
+      openSettings: () => setSettingsOpen(true),
+      closeSettings: () => setSettingsOpen(false),
+      openOptimizer: () => setOptimizerOpen(true),
+      closeOptimizer: () => setOptimizerOpen(false),
+      openMetrics: () => setMetricsOpen(true),
+      closeMetrics: () => setMetricsOpen(false),
+    })
+  }, [])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -110,6 +133,7 @@ function App() {
         onSettingsClick={() => setSettingsOpen(true)}
         onOptimizerClick={() => setOptimizerOpen(true)}
         onResetClick={() => useSimulationStore.getState().resetToDefaults()}
+        onTutorialClick={() => useTutorialStore.getState().openTutorial()}
       />
 
       <main className="container mx-auto px-4 py-6">
@@ -131,6 +155,9 @@ function App() {
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <OptimizerModal isOpen={optimizerOpen} onClose={() => setOptimizerOpen(false)} />
       <MetricsSelectionModal isOpen={metricsOpen} onClose={() => setMetricsOpen(false)} />
+
+      {/* Tutorial walkthrough */}
+      <TutorialOverlay />
     </div>
   )
 }

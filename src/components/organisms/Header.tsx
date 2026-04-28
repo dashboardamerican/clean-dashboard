@@ -5,12 +5,14 @@ interface HeaderProps {
   onSettingsClick: () => void;
   onOptimizerClick: () => void;
   onResetClick: () => void;
+  onTutorialClick: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onSettingsClick,
   onOptimizerClick,
   onResetClick,
+  onTutorialClick,
 }) => {
   return (
     <header className="bg-white shadow-sm">
@@ -48,6 +50,27 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Navigation buttons */}
           <nav className="flex items-center gap-2">
             <button
+              onClick={onTutorialClick}
+              className="w-8 h-8 flex items-center justify-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
+              title="Show tutorial"
+              aria-label="Show tutorial"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093M12 17h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </button>
+
+            <button
               onClick={onResetClick}
               className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
               title="Reset to defaults (R)"
@@ -57,6 +80,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               onClick={onSettingsClick}
+              data-tutorial-id="settings-button"
               className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
               title="Cost settings (S)"
             >
@@ -86,6 +110,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               onClick={onOptimizerClick}
+              data-tutorial-id="optimizer-button"
               className="px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded transition-colors"
               title="Run optimizer (O)"
             >

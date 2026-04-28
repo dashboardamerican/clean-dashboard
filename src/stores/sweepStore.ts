@@ -440,7 +440,7 @@ export const useSweepStore = create<SweepState>()(
         const simStore = useSimulationStore.getState();
         const { solarProfile, windProfile, loadProfile, config } = simStore;
         const costs = useSettingsStore.getState().costs;
-        const { resourceSweepResource, resourceSweepSteps } = get();
+        const { resourceSweepResource, resourceSweepSteps, resourceSweepMetric } = get();
 
         const wasmCosts = serializeCostParams(costs);
         const batteryMode = config.battery_mode;
@@ -488,6 +488,45 @@ export const useSweepStore = create<SweepState>()(
           clean_match: r.clean_match,
           lcoe: r.lcoe,
         }));
+
+        // ELCC sweep mode: for each portfolio, also compute first_in + marginal
+        // ELCC for the swept resource. Mirrors Python's resource sweep with
+        // metric_type='elcc' which plots both Avg (First-In) and Marginal as
+        // the resource ramps. Costs ~10× more sims per point (ELCC runs many
+        // sub-simulations) — only run when explicitly requested.
+        if (resourceSweepMetric === 'elcc') {
+          const solarF = new Float64Array(solarProfile);
+          const windF = new Float64Array(windProfile);
+          const loadF = new Float64Array(loadProfile);
+          for (let i = 0; i < portfolios.length; i++) {
+            const p = portfolios[i];
+            try {
+              const elcc = wasm.calculate_elcc_metrics(
+                p.solar,
+                p.wind,
+                p.storage,
+                p.clean_firm,
+                solarF,
+                windF,
+                loadF,
+                serializeBatteryMode(config.battery_mode),
+                config.battery_efficiency,
+                config.max_demand_response,
+              ) as {
+                solar: { first_in: number; marginal: number };
+                wind: { first_in: number; marginal: number };
+                storage: { first_in: number; marginal: number };
+                clean_firm: { first_in: number; marginal: number };
+              };
+              const r = elcc[resourceSweepResource];
+              points[i].first_in_elcc = r.first_in;
+              points[i].marginal_elcc = r.marginal;
+            } catch (e) {
+              // Leave first_in_elcc / marginal_elcc undefined on failure
+              console.warn(`ELCC failed at point ${i}:`, e);
+            }
+          }
+        }
 
         const elapsed_ms = performance.now() - startTime;
 

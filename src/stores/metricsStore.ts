@@ -22,7 +22,10 @@ export const useMetricsStore = create<MetricsState>()(
   persist(
     immer((set) => ({
       selectedMetrics: [...DEFAULT_SELECTED_METRICS],
-      elccMethod: ElccMethod.Contribution,
+      // Default to Delta (E3 method) — the standard "fair allocation" view
+      // that incorporates Marginal + interactive effects. Mirrors Python's
+      // preferred ELCC report and is the most rigorous of the four methods.
+      elccMethod: ElccMethod.Delta,
 
       setSelectedMetrics: (metrics) => {
         set((state) => {
@@ -56,7 +59,7 @@ export const useMetricsStore = create<MetricsState>()(
     })),
     {
       name: 'metrics-storage',
-      version: 3, // Bump for 4-method ELCC (FirstIn, Marginal, Contribution, Delta)
+      version: 4, // Bump to migrate default ELCC method Contribution → Delta
     }
   )
 );

@@ -90,7 +90,7 @@ export const MetricsPanel: React.FC<MetricsPanelProps> = ({ onOpenMetricsModal }
   // Just show stale data while running, or placeholder if no data yet
   if (!simulationResult || !lcoeResult || !metrics) {
     return (
-      <div className="bg-white rounded-lg shadow p-4">
+      <div data-tutorial-id="metrics-panel" className="bg-white rounded-lg shadow p-4">
         <div className="flex items-center justify-center h-24 text-gray-500">
           Adjust capacity sliders to run simulation
         </div>
@@ -259,11 +259,12 @@ export const MetricsPanel: React.FC<MetricsPanelProps> = ({ onOpenMetricsModal }
   );
 
   return (
-    <div className="bg-white rounded-lg shadow p-4">
+    <div data-tutorial-id="metrics-panel" className="bg-white rounded-lg shadow p-4">
       {/* Header with "+ More Metrics" button */}
       <div className="flex justify-end mb-2">
         <button
           onClick={onOpenMetricsModal}
+          data-tutorial-id="more-metrics-button"
           className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

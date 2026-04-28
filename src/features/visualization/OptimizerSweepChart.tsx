@@ -12,9 +12,11 @@ export const OptimizerSweepChart: React.FC = () => {
     savedSweep,
     savedLabel,
     useFineTargets,
+    sweepResources,
     isRunning,
     error,
     setUseFineTargets,
+    setSweepResource,
     runOptimizerSweep,
     saveAsComparison,
     clearSavedComparison,
@@ -23,6 +25,28 @@ export const OptimizerSweepChart: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('lcoe');
   const [compositionUnit, setCompositionUnit] = useState<CompositionUnit>('mw');
   const [saveLabel, setSaveLabel] = useState('');
+
+  const resourceToggles = (
+    <div className="flex flex-wrap items-center gap-3">
+      <span className="text-xs font-medium text-gray-600">Allow:</span>
+      {([
+        ['solar', 'Solar'],
+        ['wind', 'Wind'],
+        ['storage', 'Storage'],
+        ['clean_firm', 'Clean Firm'],
+      ] as const).map(([key, label]) => (
+        <label key={key} className="flex items-center gap-1.5 text-xs">
+          <input
+            type="checkbox"
+            checked={sweepResources[key]}
+            onChange={(e) => setSweepResource(key, e.target.checked)}
+            className="rounded"
+          />
+          {label}
+        </label>
+      ))}
+    </div>
+  );
 
   const handleRun = async () => {
     await runOptimizerSweep();
@@ -72,22 +96,25 @@ export const OptimizerSweepChart: React.FC = () => {
         </svg>
         <p className="text-lg font-medium">Optimizer Sweep</p>
         <p className="text-sm mt-1">Run a sweep to see optimal portfolios across targets</p>
-        <div className="mt-4 flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={useFineTargets}
-              onChange={(e) => setUseFineTargets(e.target.checked)}
-              className="rounded"
-            />
-            Fine targets (5% steps)
-          </label>
-          <button
-            onClick={handleRun}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Run Sweep
-          </button>
+        <div className="mt-4 flex flex-col items-center gap-3">
+          {resourceToggles}
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={useFineTargets}
+                onChange={(e) => setUseFineTargets(e.target.checked)}
+                className="rounded"
+              />
+              Fine targets (5% steps)
+            </label>
+            <button
+              onClick={handleRun}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Run Sweep
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -365,6 +392,9 @@ export const OptimizerSweepChart: React.FC = () => {
 
   return (
     <div>
+      {/* Resource toggles */}
+      <div className="px-4 mb-3">{resourceToggles}</div>
+
       {/* Controls */}
       <div className="flex flex-wrap justify-between items-center mb-4 px-4 gap-4">
         <div className="flex items-center gap-4">

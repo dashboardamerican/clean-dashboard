@@ -272,50 +272,84 @@ pub fn calculate_elcc(
         }
     };
 
-    // Delta ELCC = Last-In + allocated interactive effect
-    let solar_delta_mw = solar_last_in_total_mw + allocate_effect(solar_last_in_total_mw);
-    let wind_delta_mw = wind_last_in_total_mw + allocate_effect(wind_last_in_total_mw);
-    let storage_delta_mw = storage_last_in_total_mw + allocate_effect(storage_last_in_total_mw);
-    let cf_delta_mw = cf_last_in_total_mw + allocate_effect(cf_last_in_total_mw);
+    // Delta ELCC = Last-In + allocated interactive effect (in MW).
+    // We compute the raw values first, then run Python's "negative-Delta
+    // redistribution": any resource whose Delta would go negative (overlap
+    // exceeds its standalone marginal contribution) is set to 0 and the
+    // freed-up MW is redistributed proportionally among positive resources.
+    // This preserves sum(Delta) ≈ Portfolio ELCC.
+    let mut solar_delta_mw = solar_last_in_total_mw + allocate_effect(solar_last_in_total_mw);
+    let mut wind_delta_mw = wind_last_in_total_mw + allocate_effect(wind_last_in_total_mw);
+    let mut storage_delta_mw =
+        storage_last_in_total_mw + allocate_effect(storage_last_in_total_mw);
+    let mut cf_delta_mw = cf_last_in_total_mw + allocate_effect(cf_last_in_total_mw);
 
-    // Convert to percentages (clamped to 0-100)
+    // Redistribute negatives → 0, deficit goes proportionally to positives.
+    let negative_deficit = (-solar_delta_mw).max(0.0)
+        + (-wind_delta_mw).max(0.0)
+        + (-storage_delta_mw).max(0.0)
+        + (-cf_delta_mw).max(0.0);
+    if negative_deficit > 0.0 {
+        if solar_delta_mw < 0.0 {
+            solar_delta_mw = 0.0;
+        }
+        if wind_delta_mw < 0.0 {
+            wind_delta_mw = 0.0;
+        }
+        if storage_delta_mw < 0.0 {
+            storage_delta_mw = 0.0;
+        }
+        if cf_delta_mw < 0.0 {
+            cf_delta_mw = 0.0;
+        }
+
+        let positive_total = solar_delta_mw + wind_delta_mw + storage_delta_mw + cf_delta_mw;
+        if positive_total > 0.0 {
+            let scale = negative_deficit / positive_total;
+            solar_delta_mw += solar_delta_mw * scale;
+            wind_delta_mw += wind_delta_mw * scale;
+            storage_delta_mw += storage_delta_mw * scale;
+            cf_delta_mw += cf_delta_mw * scale;
+        }
+    }
+
+    // Convert to percentages. Floor at 0 (negatives already redistributed).
+    // No upper cap — Delta CAN exceed 100% for a firm resource that gets
+    // synergy bonus on top of its standalone capacity (Python doesn't cap
+    // either, and the value is informative — "CF is 19% more valuable
+    // here than CF alone").
     let solar_delta_pct = if solar_capacity > 0.0 {
-        ((solar_delta_mw / solar_capacity) * 100.0)
-            .max(0.0)
-            .min(100.0)
+        ((solar_delta_mw / solar_capacity) * 100.0).max(0.0)
     } else {
         0.0
     };
 
     let wind_delta_pct = if wind_capacity > 0.0 {
-        ((wind_delta_mw / wind_capacity) * 100.0)
-            .max(0.0)
-            .min(100.0)
+        ((wind_delta_mw / wind_capacity) * 100.0).max(0.0)
     } else {
         0.0
     };
 
     let storage_delta_pct = if storage_capacity > 0.0 {
-        ((storage_delta_mw / storage_capacity) * 100.0)
-            .max(0.0)
-            .min(100.0)
+        ((storage_delta_mw / storage_capacity) * 100.0).max(0.0)
     } else {
         0.0
     };
 
     let cf_delta_pct = if clean_firm_capacity > 0.0 {
-        ((cf_delta_mw / clean_firm_capacity) * 100.0)
-            .max(0.0)
-            .min(100.0)
+        ((cf_delta_mw / clean_firm_capacity) * 100.0).max(0.0)
     } else {
         0.0
     };
 
-    // Diversity benefit: positive = complementary resources, negative = overlap
-    // Portfolio ELCC - Sum of Contributions: if portfolio > sum, resources synergize
-    let sum_contributions =
-        solar_contribution_mw + wind_contribution_mw + storage_contribution_mw + cf_contribution_mw;
-    let diversity_benefit = portfolio_elcc_mw - sum_contributions;
+    // Diversity benefit: positive = synergy on the margin (e.g. storage that
+    // charges from solar excess is more valuable in the portfolio than alone),
+    // negative = marginal overlap. Uses the Marginal/Last-In basis, which
+    // matches Python's `total_interactive_effect_mw` and gives the
+    // user-intuitive sign — Contribution-based residuals can read negative
+    // even for portfolios that synergize, because each resource's "removal
+    // pain" double-counts what the others already cover.
+    let diversity_benefit = portfolio_interactive_effect_mw;
 
     Ok(ElccResult {
         solar: ResourceElcc {

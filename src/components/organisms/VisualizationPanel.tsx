@@ -32,6 +32,8 @@ export const VisualizationPanel: React.FC = () => {
   const setVisualization = useUiStore((state) => state.setVisualization);
   const selectedWeek = useUiStore((state) => state.selectedWeek);
   const setSelectedWeek = useUiStore((state) => state.setSelectedWeek);
+  const weeklyScope = useUiStore((state) => state.weeklyScope);
+  const setWeeklyScope = useUiStore((state) => state.setWeeklyScope);
   const simulationResult = useSimulationStore((state) => state.simulationResult);
 
   const renderVisualization = () => {
@@ -59,7 +61,7 @@ export const VisualizationPanel: React.FC = () => {
 
     switch (currentViz) {
       case 'weekly':
-        return <WeeklyChart week={selectedWeek} />;
+        return <WeeklyChart week={selectedWeek} scope={weeklyScope} />;
       case 'heatmap':
         return <AnnualHeatmap />;
       case 'battery':
@@ -79,34 +81,65 @@ export const VisualizationPanel: React.FC = () => {
     <div className="bg-white rounded-lg shadow">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b">
-        <Select
-          value={currentViz}
-          options={VISUALIZATION_OPTIONS}
-          onChange={(v) => setVisualization(v as VisualizationType)}
-          className="w-48"
-        />
+        <div data-tutorial-id="visualization-picker">
+          <Select
+            value={currentViz}
+            options={VISUALIZATION_OPTIONS}
+            onChange={(v) => setVisualization(v as VisualizationType)}
+            className="w-48"
+          />
+        </div>
 
         {(currentViz === 'weekly' || currentViz === 'gasBaseline') && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setSelectedWeek(selectedWeek - 1)}
-              disabled={selectedWeek <= 1}
-              className="p-1 rounded hover:bg-gray-100 disabled:opacity-50"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <span className="text-sm font-medium">Week {selectedWeek}</span>
-            <button
-              onClick={() => setSelectedWeek(selectedWeek + 1)}
-              disabled={selectedWeek >= 52}
-              className="p-1 rounded hover:bg-gray-100 disabled:opacity-50"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
+          <div className="flex items-center gap-3">
+            {currentViz === 'weekly' && (
+              <div className="inline-flex rounded-md border border-gray-200 overflow-hidden">
+                <button
+                  onClick={() => setWeeklyScope('week')}
+                  className={`px-3 py-1 text-sm transition-colors ${
+                    weeklyScope === 'week'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  Week
+                </button>
+                <button
+                  onClick={() => setWeeklyScope('year')}
+                  className={`px-3 py-1 text-sm transition-colors border-l border-gray-200 ${
+                    weeklyScope === 'year'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  Year
+                </button>
+              </div>
+            )}
+
+            {(currentViz === 'gasBaseline' || weeklyScope === 'week') && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSelectedWeek(selectedWeek - 1)}
+                  disabled={selectedWeek <= 1}
+                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-50"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <span className="text-sm font-medium">Week {selectedWeek}</span>
+                <button
+                  onClick={() => setSelectedWeek(selectedWeek + 1)}
+                  disabled={selectedWeek >= 52}
+                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-50"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

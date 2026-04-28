@@ -9,8 +9,9 @@
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "type-check": "tsc --noEmit",
-    "wasm:build": "cd wasm-src && wasm-pack build --target web --out-dir ../src/lib/wasm/pkg",
-    "wasm:watch": "cd wasm-src && cargo watch -s 'wasm-pack build --target web --out-dir ../src/lib/wasm/pkg'"
+    "agent": "node ../agent_harness/dashboard-agent.mjs",
+    "wasm:build": "cd ../rust && wasm-pack build --target web --out-dir ../web/src/lib/wasm/pkg",
+    "wasm:watch": "cd ../rust && cargo watch -s 'wasm-pack build --target web --out-dir ../web/src/lib/wasm/pkg'"
   },
   "dependencies": {
     "react": "^18.3.1",

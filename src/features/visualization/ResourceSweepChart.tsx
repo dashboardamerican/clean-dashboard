@@ -27,6 +27,7 @@ const RESOURCE_COLORS: Record<ResourceSweepResource, string> = {
 const METRIC_LABELS: Record<ResourceSweepMetric, { axis: string; hover: string }> = {
   clean_match: { axis: 'Clean Match (%)', hover: 'Clean Match' },
   lcoe: { axis: 'LCOE ($/MWh)', hover: 'LCOE' },
+  elcc: { axis: 'ELCC (%)', hover: 'ELCC' },
 };
 
 export const ResourceSweepChart: React.FC = () => {
@@ -98,6 +99,7 @@ export const ResourceSweepChart: React.FC = () => {
           >
             <option value="clean_match">Clean Match</option>
             <option value="lcoe">LCOE</option>
+            <option value="elcc">ELCC (Avg + Marginal)</option>
           </select>
         </div>
 
@@ -156,16 +158,11 @@ export const ResourceSweepChart: React.FC = () => {
     elapsed_ms,
   } = resourceSweepResult;
 
-  const metricKey: 'clean_match' | 'lcoe' = resourceSweepMetric;
   const xValues = points.map((p) => p.capacity);
-  const yValues = points.map((p) => p[metricKey]);
-
   const resourceLabel = RESOURCE_LABELS[resource];
   const resourceUnit = RESOURCE_UNITS[resource];
   const resourceColor = RESOURCE_COLORS[resource];
   const yAxis = METRIC_LABELS[resourceSweepMetric].axis;
-  const yHover = METRIC_LABELS[resourceSweepMetric].hover;
-  const yFmt = resourceSweepMetric === 'lcoe' ? '$%{y:.1f}/MWh' : '%{y:.1f}%';
 
   // Build subtitle showing fixed values
   const fixedParts: string[] = [];
@@ -180,26 +177,62 @@ export const ResourceSweepChart: React.FC = () => {
   });
   const subtitle = fixedParts.join(' • ');
 
-  const traces: any[] = [
-    {
-      x: xValues,
-      y: yValues,
-      name: `${resourceLabel} sweep`,
-      type: 'scatter',
-      mode: 'lines+markers',
-      line: { color: resourceColor, width: 3 },
-      marker: { size: 7, color: resourceColor, line: { color: 'white', width: 1 } },
-      hovertemplate: `${resourceLabel}: %{x:.0f} ${resourceUnit}<br>${yHover}: ${yFmt}<extra></extra>`,
-    },
-  ];
+  // ELCC mode plots two traces (Avg = First-In, Marginal); other modes plot one.
+  let traces: any[] = [];
+  let allY: number[] = [];
+
+  if (resourceSweepMetric === 'elcc') {
+    const firstIn = points.map((p) => p.first_in_elcc ?? NaN);
+    const marginal = points.map((p) => p.marginal_elcc ?? NaN);
+    allY = [...firstIn, ...marginal].filter((y) => Number.isFinite(y));
+    traces = [
+      {
+        x: xValues,
+        y: firstIn,
+        name: `${resourceLabel} Avg ELCC`,
+        type: 'scatter',
+        mode: 'lines+markers',
+        line: { color: resourceColor, width: 3 },
+        marker: { size: 7, color: resourceColor, line: { color: 'white', width: 1 } },
+        hovertemplate: `${resourceLabel}: %{x:.0f} ${resourceUnit}<br>Avg ELCC: %{y:.1f}%<extra></extra>`,
+      },
+      {
+        x: xValues,
+        y: marginal,
+        name: `${resourceLabel} Marginal ELCC`,
+        type: 'scatter',
+        mode: 'lines+markers',
+        line: { color: resourceColor, width: 2, dash: 'dot' },
+        marker: { size: 6, color: resourceColor, symbol: 'diamond' },
+        hovertemplate: `${resourceLabel}: %{x:.0f} ${resourceUnit}<br>Marginal ELCC: %{y:.1f}%<extra></extra>`,
+      },
+    ];
+  } else {
+    const metricKey: 'clean_match' | 'lcoe' = resourceSweepMetric;
+    const yValues = points.map((p) => p[metricKey]);
+    allY = yValues.filter((y) => Number.isFinite(y));
+    const yFmt = resourceSweepMetric === 'lcoe' ? '$%{y:.1f}/MWh' : '%{y:.1f}%';
+    const yHover = METRIC_LABELS[resourceSweepMetric].hover;
+    traces = [
+      {
+        x: xValues,
+        y: yValues,
+        name: `${resourceLabel} sweep`,
+        type: 'scatter',
+        mode: 'lines+markers',
+        line: { color: resourceColor, width: 3 },
+        marker: { size: 7, color: resourceColor, line: { color: 'white', width: 1 } },
+        hovertemplate: `${resourceLabel}: %{x:.0f} ${resourceUnit}<br>${yHover}: ${yFmt}<extra></extra>`,
+      },
+    ];
+  }
 
   // y-axis range with 5% padding
-  const finiteYs = yValues.filter((y) => Number.isFinite(y));
   let yMin = 0;
   let yMax = 100;
-  if (finiteYs.length > 0) {
-    const lo = Math.min(...finiteYs);
-    const hi = Math.max(...finiteYs);
+  if (allY.length > 0) {
+    const lo = Math.min(...allY);
+    const hi = Math.max(...allY);
     const span = hi - lo || 1;
     yMin = Math.max(0, lo - span * 0.05);
     yMax = hi + span * 0.05;
@@ -286,6 +319,12 @@ export const ResourceSweepChart: React.FC = () => {
               <th className="text-left py-2 px-2">{resourceLabel} Capacity ({resourceUnit})</th>
               <th className="text-right py-2 px-2">Clean Match</th>
               <th className="text-right py-2 px-2">LCOE</th>
+              {resourceSweepMetric === 'elcc' && (
+                <>
+                  <th className="text-right py-2 px-2">Avg ELCC</th>
+                  <th className="text-right py-2 px-2">Marginal ELCC</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -299,6 +338,16 @@ export const ResourceSweepChart: React.FC = () => {
                   <td className="py-1 px-2">{p.capacity.toFixed(0)}</td>
                   <td className="text-right py-1 px-2">{p.clean_match.toFixed(1)}%</td>
                   <td className="text-right py-1 px-2">${p.lcoe.toFixed(1)}</td>
+                  {resourceSweepMetric === 'elcc' && (
+                    <>
+                      <td className="text-right py-1 px-2">
+                        {p.first_in_elcc !== undefined ? `${p.first_in_elcc.toFixed(1)}%` : '—'}
+                      </td>
+                      <td className="text-right py-1 px-2">
+                        {p.marginal_elcc !== undefined ? `${p.marginal_elcc.toFixed(1)}%` : '—'}
+                      </td>
+                    </>
+                  )}
                 </tr>
               );
             })}

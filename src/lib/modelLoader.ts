@@ -9,9 +9,8 @@
 
 import { BatteryMode } from '../types';
 
-// Default model path (can be overridden for CDN deployment).
-// Uses Vite's BASE_URL so it works under any GitHub Pages subpath.
-const MODEL_BASE_PATH = `${import.meta.env.BASE_URL}models`;
+// Default model path (can be overridden for CDN deployment)
+const MODEL_BASE_PATH = '/models';
 
 // Battery mode names for file naming
 const BATTERY_MODE_NAMES: Record<BatteryMode, string> = {

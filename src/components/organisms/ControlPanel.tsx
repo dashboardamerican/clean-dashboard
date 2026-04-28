@@ -32,23 +32,27 @@ export const ControlPanel: React.FC = () => {
       </h2>
 
       {/* Zone selection */}
-      <Select
-        label="Region"
-        value={zone}
-        options={zoneOptions}
-        onChange={(v) => setZone(v as typeof zone)}
-      />
+      <div data-tutorial-id="region-selector">
+        <Select
+          label="Region"
+          value={zone}
+          options={zoneOptions}
+          onChange={(v) => setZone(v as typeof zone)}
+        />
+      </div>
 
       {/* Load shape */}
-      <Select
-        label="Load Shape"
-        value={loadType}
-        options={loadTypeOptions}
-        onChange={(v) => setLoadType(v as LoadType)}
-      />
+      <div data-tutorial-id="load-shape">
+        <Select
+          label="Load Shape"
+          value={loadType}
+          options={loadTypeOptions}
+          onChange={(v) => setLoadType(v as LoadType)}
+        />
+      </div>
 
       {/* Capacity sliders */}
-      <div className="space-y-4">
+      <div data-tutorial-id="capacity-sliders" className="space-y-4">
         <h3 className="text-sm font-medium text-gray-700 uppercase tracking-wide">
           Generation Capacity
         </h3>
@@ -88,7 +92,7 @@ export const ControlPanel: React.FC = () => {
       </div>
 
       {/* Storage */}
-      <div className="space-y-4">
+      <div data-tutorial-id="storage-and-battery" className="space-y-4">
         <h3 className="text-sm font-medium text-gray-700 uppercase tracking-wide">
           Energy Storage
         </h3>
@@ -113,7 +117,7 @@ export const ControlPanel: React.FC = () => {
       </div>
 
       {/* Demand Response */}
-      <div className="space-y-4">
+      <div data-tutorial-id="demand-response" className="space-y-4">
         <h3 className="text-sm font-medium text-gray-700 uppercase tracking-wide">
           Demand Response
         </h3>

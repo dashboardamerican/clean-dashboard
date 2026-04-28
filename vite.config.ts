@@ -8,6 +8,7 @@ import topLevelAwait from 'vite-plugin-top-level-await'
 // Defaults to "/" for local dev.
 const base = process.env.BASE_PATH || '/'
 
+// https://vitejs.dev/config/
 export default defineConfig({
   base,
   plugins: [

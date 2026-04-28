@@ -485,12 +485,15 @@ export type CostSweepParam =
 // =============================================================================
 
 export type ResourceSweepResource = 'solar' | 'wind' | 'storage' | 'clean_firm';
-export type ResourceSweepMetric = 'clean_match' | 'lcoe';
+export type ResourceSweepMetric = 'clean_match' | 'lcoe' | 'elcc';
 
 export interface ResourceSweepPoint {
   capacity: number;
   clean_match: number;
   lcoe: number;
+  /** ELCC values are populated only when the sweep was run with `metric='elcc'`. */
+  first_in_elcc?: number;
+  marginal_elcc?: number;
 }
 
 export interface ResourceSweepResult {
