@@ -232,6 +232,7 @@ export const __wbg_get_technologycostbreakdown_total: (a: number) => number;
 export const __wbg_get_technologycostbreakdown_var_om: (a: number) => number;
 export const battery_mode_default: () => number;
 export const battery_mode_hybrid: () => number;
+export const battery_mode_limited_forecast: () => number;
 export const battery_mode_peak_shaver: () => number;
 export const calculate_elcc_metrics: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: any, l: number, m: number) => [number, number, number];
 export const compute_land_use: (a: number, b: number, c: number, d: number, e: any) => [number, number, number];

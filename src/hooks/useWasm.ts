@@ -60,6 +60,7 @@ export interface WasmModule {
   battery_mode_default: () => any;
   battery_mode_peak_shaver: () => any;
   battery_mode_hybrid: () => any;
+  battery_mode_limited_forecast: () => any;
 
   // Model cache functions
   wasm_load_model: (zone: string, batteryMode: any, bytes: Uint8Array) => void;
@@ -248,6 +249,7 @@ function createMockWasmModule(): WasmModule {
     battery_mode_default: () => BatteryMode.Default,
     battery_mode_peak_shaver: () => BatteryMode.PeakShaver,
     battery_mode_hybrid: () => BatteryMode.Hybrid,
+    battery_mode_limited_forecast: () => BatteryMode.LimitedForecast,
 
     // Mock model cache functions
     wasm_load_model: () => {},

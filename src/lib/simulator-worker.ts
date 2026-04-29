@@ -59,7 +59,7 @@ interface SweepResult {
   elapsed_ms: number;
 }
 
-type BatteryMode = 'Default' | 'PeakShaver' | 'Hybrid';
+type BatteryMode = 'Default' | 'PeakShaver' | 'Hybrid' | 'LimitedForecast';
 
 type WorkerRequest = {
   type: 'init';
@@ -90,6 +90,21 @@ type WorkerRequest = {
 let wasmModule: any = null;
 let isInitialized = false;
 
+function toWasmBatteryMode(mode: BatteryMode): any {
+  switch (mode) {
+    case 'Default':
+      return wasmModule.battery_mode_default();
+    case 'PeakShaver':
+      return wasmModule.battery_mode_peak_shaver();
+    case 'Hybrid':
+      return wasmModule.battery_mode_hybrid();
+    case 'LimitedForecast':
+      return wasmModule.battery_mode_limited_forecast();
+    default:
+      return wasmModule.battery_mode_default();
+  }
+}
+
 /**
  * Initialize WASM module
  */
@@ -117,11 +132,7 @@ function loadModel(zone: string, batteryMode: BatteryMode, bytes: ArrayBuffer): 
     throw new Error('WASM not initialized');
   }
 
-  const batteryModeEnum = batteryMode === 'Default'
-    ? wasmModule.battery_mode_default()
-    : batteryMode === 'PeakShaver'
-      ? wasmModule.battery_mode_peak_shaver()
-      : wasmModule.battery_mode_hybrid();
+  const batteryModeEnum = toWasmBatteryMode(batteryMode);
 
   // Convert ArrayBuffer to Uint8Array for WASM
   const uint8Array = new Uint8Array(bytes);
@@ -143,12 +154,7 @@ function runSweep(
     throw new Error('WASM not initialized');
   }
 
-  // Convert mode string to WASM enum
-  const batteryMode = mode === 'Default'
-    ? wasmModule.battery_mode_default()
-    : mode === 'PeakShaver'
-      ? wasmModule.battery_mode_peak_shaver()
-      : wasmModule.battery_mode_hybrid();
+  const batteryMode = toWasmBatteryMode(mode);
 
   // Check if model is loaded for this zone
   const modelLoaded = wasmModule.wasm_is_model_loaded?.(zone, batteryMode) || false;
@@ -192,12 +198,7 @@ function evaluateBatch(
     throw new Error('WASM not initialized');
   }
 
-  // Convert mode string to WASM enum
-  const batteryMode = mode === 'Default'
-    ? wasmModule.battery_mode_default()
-    : mode === 'PeakShaver'
-      ? wasmModule.battery_mode_peak_shaver()
-      : wasmModule.battery_mode_hybrid();
+  const batteryMode = toWasmBatteryMode(mode);
 
   // Call the batch evaluation function
   const results = wasmModule.evaluate_batch(

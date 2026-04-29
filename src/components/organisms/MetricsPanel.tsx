@@ -99,7 +99,7 @@ export const MetricsPanel: React.FC<MetricsPanelProps> = ({ onOpenMetricsModal }
   }
 
   // Get battery mode name for display
-  const batteryModeNames = ['Default', 'Peak Shaver', 'Hybrid'];
+  const batteryModeNames = ['Default', 'Peak Shaver', 'Hybrid', 'Limited Forecast'];
   const batteryModeName = batteryModeNames[config.battery_mode] || 'Default';
   const elccMethodNames: Record<ElccMethod, string> = {
     [ElccMethod.FirstIn]: 'First-In',

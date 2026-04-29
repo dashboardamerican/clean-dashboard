@@ -6,7 +6,7 @@ import {
   SimulationConfig,
 } from '../types';
 
-const BATTERY_MODE_NAMES = ['Default', 'PeakShaver', 'Hybrid'] as const;
+const BATTERY_MODE_NAMES = ['Default', 'PeakShaver', 'Hybrid', 'LimitedForecast'] as const;
 const DEPRECIATION_METHOD_NAMES = ['Macrs5', 'Macrs15', 'StraightLine'] as const;
 const PRICING_METHOD_NAMES = [
   'ScarcityBased',

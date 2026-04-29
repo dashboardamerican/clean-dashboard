@@ -16,6 +16,7 @@ export const ControlPanel: React.FC = () => {
     { value: BatteryMode.Default, label: 'Default (Water-fill)' },
     { value: BatteryMode.PeakShaver, label: 'Peak Shaver' },
     { value: BatteryMode.Hybrid, label: 'Hybrid' },
+    { value: BatteryMode.LimitedForecast, label: 'Limited Forecast (48h)' },
   ];
 
   const loadTypeOptions = [

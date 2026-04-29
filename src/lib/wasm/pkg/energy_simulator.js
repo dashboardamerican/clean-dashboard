@@ -2,7 +2,7 @@
 
 /**
  * Battery dispatch mode
- * @enum {0 | 1 | 2}
+ * @enum {0 | 1 | 2 | 3}
  */
 export const BatteryMode = Object.freeze({
     /**
@@ -17,6 +17,10 @@ export const BatteryMode = Object.freeze({
      * Two-pass: peak shaving + opportunistic dispatch
      */
     Hybrid: 2, "2": "Hybrid",
+    /**
+     * Rolling 48-hour forecast, committing 24 hours at a time
+     */
+    LimitedForecast: 3, "3": "LimitedForecast",
 });
 
 /**
@@ -1978,6 +1982,14 @@ export function battery_mode_default() {
  */
 export function battery_mode_hybrid() {
     const ret = wasm.battery_mode_hybrid();
+    return ret;
+}
+
+/**
+ * @returns {BatteryMode}
+ */
+export function battery_mode_limited_forecast() {
+    const ret = wasm.battery_mode_limited_forecast();
     return ret;
 }
 

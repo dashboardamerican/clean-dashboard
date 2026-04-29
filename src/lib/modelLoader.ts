@@ -17,6 +17,7 @@ const BATTERY_MODE_NAMES: Record<BatteryMode, string> = {
   [BatteryMode.Default]: 'default',
   [BatteryMode.PeakShaver]: 'peakshaver',
   [BatteryMode.Hybrid]: 'hybrid',
+  [BatteryMode.LimitedForecast]: 'limitedforecast',
 };
 
 // Zone name normalization for file naming

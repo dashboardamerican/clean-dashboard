@@ -38,7 +38,22 @@ export interface ZoneProfiles {
   load: Float64Array | number[];
 }
 
-type BatteryModeString = 'Default' | 'PeakShaver' | 'Hybrid';
+type BatteryModeString = 'Default' | 'PeakShaver' | 'Hybrid' | 'LimitedForecast';
+
+function batteryModeToString(mode: BatteryMode): BatteryModeString {
+  switch (Number(mode)) {
+    case 0:
+      return 'Default';
+    case 1:
+      return 'PeakShaver';
+    case 2:
+      return 'Hybrid';
+    case 3:
+      return 'LimitedForecast';
+    default:
+      return 'Default';
+  }
+}
 
 type WorkerMessage = {
   type: 'ready';
@@ -182,12 +197,7 @@ export class SimulatorWorkerPool {
 
         worker.addEventListener('message', handler);
 
-        // Convert BatteryMode enum to string
-        const modeStr: BatteryModeString = mode === 0
-          ? 'Default'
-          : mode === 1
-            ? 'PeakShaver'
-            : 'Hybrid';
+        const modeStr = batteryModeToString(mode);
 
         const request: WorkerRequest = {
           type: 'evaluate',
@@ -224,12 +234,7 @@ export class SimulatorWorkerPool {
       throw new Error('No workers available');
     }
 
-    // Convert BatteryMode enum to string
-    const batteryModeStr: BatteryModeString = batteryMode === 0
-      ? 'Default'
-      : batteryMode === 1
-        ? 'PeakShaver'
-        : 'Hybrid';
+    const batteryModeStr = batteryModeToString(batteryMode);
 
     // Load model in all workers
     const promises = this.workers.map((worker, i) =>
@@ -286,12 +291,7 @@ export class SimulatorWorkerPool {
       throw new Error('No workers available');
     }
 
-    // Convert BatteryMode enum to string
-    const batteryModeStr: BatteryModeString = batteryMode === 0
-      ? 'Default'
-      : batteryMode === 1
-        ? 'PeakShaver'
-        : 'Hybrid';
+    const batteryModeStr = batteryModeToString(batteryMode);
 
     // Split targets across workers
     const chunkSize = Math.ceil(targets.length / this.workers.length);

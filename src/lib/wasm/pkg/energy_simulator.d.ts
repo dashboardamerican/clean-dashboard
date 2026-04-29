@@ -17,6 +17,10 @@ export enum BatteryMode {
      * Two-pass: peak shaving + opportunistic dispatch
      */
     Hybrid = 2,
+    /**
+     * Rolling 48-hour forecast, committing 24 hours at a time
+     */
+    LimitedForecast = 3,
 }
 
 /**
@@ -448,6 +452,8 @@ export class TechnologyCostBreakdown {
 export function battery_mode_default(): BatteryMode;
 
 export function battery_mode_hybrid(): BatteryMode;
+
+export function battery_mode_limited_forecast(): BatteryMode;
 
 export function battery_mode_peak_shaver(): BatteryMode;
 
@@ -1058,6 +1064,7 @@ export interface InitOutput {
     readonly __wbg_get_technologycostbreakdown_var_om: (a: number) => number;
     readonly battery_mode_default: () => number;
     readonly battery_mode_hybrid: () => number;
+    readonly battery_mode_limited_forecast: () => number;
     readonly battery_mode_peak_shaver: () => number;
     readonly calculate_elcc_metrics: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: any, l: number, m: number) => [number, number, number];
     readonly compute_land_use: (a: number, b: number, c: number, d: number, e: any) => [number, number, number];

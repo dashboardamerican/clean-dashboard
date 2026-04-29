@@ -157,7 +157,7 @@ export const useSweepStore = create<SweepState>()(
             state.costSweepRange = [1000, 12000];
             break;
           case 'gas_capex':
-            state.costSweepRange = [500, 2000];
+            state.costSweepRange = [500, 4500];
             break;
           case 'gas_price':
             state.costSweepRange = [2, 14];

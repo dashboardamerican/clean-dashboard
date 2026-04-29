@@ -7,6 +7,7 @@ export enum BatteryMode {
   Default = 0,
   PeakShaver = 1,
   Hybrid = 2,
+  LimitedForecast = 3,
 }
 
 export enum DepreciationMethod {
