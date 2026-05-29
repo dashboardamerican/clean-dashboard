@@ -265,6 +265,30 @@ export class OptimizerConfig {
      */
     enable_wind: boolean;
     /**
+     * Whether optimizer evaluations can charge storage from gas/grid
+     */
+    limited_forecast_allow_gas_charging: boolean;
+    /**
+     * Limited-forecast committed dispatch block used during optimizer evaluations
+     */
+    limited_forecast_commit_hours: number;
+    /**
+     * Limited-forecast look-ahead horizon used during optimizer evaluations
+     */
+    limited_forecast_horizon_hours: number;
+    /**
+     * Peak value proxy used during optimizer evaluations
+     */
+    limited_forecast_peak_value_mwh_per_mw: number;
+    /**
+     * Renewable forecast error used during optimizer evaluations
+     */
+    limited_forecast_renewable_error_pct: number;
+    /**
+     * Battery SOC holdback target used during optimizer evaluations
+     */
+    limited_forecast_soc_reserve_pct: number;
+    /**
      * Maximum clean firm capacity MW
      */
     max_clean_firm: number;
@@ -394,6 +418,30 @@ export class SimulationConfig {
      * Clean firm capacity in MW (constant output)
      */
     clean_firm_capacity: number;
+    /**
+     * Whether limited-forecast dispatch can charge from gas/grid
+     */
+    limited_forecast_allow_gas_charging: boolean;
+    /**
+     * Limited-forecast committed dispatch block in hours
+     */
+    limited_forecast_commit_hours: number;
+    /**
+     * Limited-forecast look-ahead horizon in hours
+     */
+    limited_forecast_horizon_hours: number;
+    /**
+     * Peak value proxy in MWh per MW for limited-forecast objective
+     */
+    limited_forecast_peak_value_mwh_per_mw: number;
+    /**
+     * Renewable forecast error as a 0-100 persistence blend
+     */
+    limited_forecast_renewable_error_pct: number;
+    /**
+     * Battery SOC holdback target as percent of storage capacity
+     */
+    limited_forecast_soc_reserve_pct: number;
     /**
      * Maximum demand response in MW
      */
@@ -900,9 +948,15 @@ export interface InitOutput {
     readonly __wbg_get_optimizerconfig_enable_solar: (a: number) => number;
     readonly __wbg_get_optimizerconfig_enable_storage: (a: number) => number;
     readonly __wbg_get_optimizerconfig_enable_wind: (a: number) => number;
+    readonly __wbg_get_optimizerconfig_limited_forecast_allow_gas_charging: (a: number) => number;
+    readonly __wbg_get_optimizerconfig_limited_forecast_commit_hours: (a: number) => number;
+    readonly __wbg_get_optimizerconfig_limited_forecast_horizon_hours: (a: number) => number;
     readonly __wbg_get_optimizerresult_num_evaluations: (a: number) => number;
     readonly __wbg_get_optimizerresult_success: (a: number) => number;
     readonly __wbg_get_simulationconfig_battery_mode: (a: number) => number;
+    readonly __wbg_get_simulationconfig_limited_forecast_allow_gas_charging: (a: number) => number;
+    readonly __wbg_get_simulationconfig_limited_forecast_commit_hours: (a: number) => number;
+    readonly __wbg_get_simulationconfig_limited_forecast_horizon_hours: (a: number) => number;
     readonly __wbg_lcoeresult_free: (a: number, b: number) => void;
     readonly __wbg_optimizerconfig_free: (a: number, b: number) => void;
     readonly __wbg_optimizerresult_free: (a: number, b: number) => void;
@@ -973,9 +1027,15 @@ export interface InitOutput {
     readonly __wbg_set_optimizerconfig_enable_solar: (a: number, b: number) => void;
     readonly __wbg_set_optimizerconfig_enable_storage: (a: number, b: number) => void;
     readonly __wbg_set_optimizerconfig_enable_wind: (a: number, b: number) => void;
+    readonly __wbg_set_optimizerconfig_limited_forecast_allow_gas_charging: (a: number, b: number) => void;
+    readonly __wbg_set_optimizerconfig_limited_forecast_commit_hours: (a: number, b: number) => void;
+    readonly __wbg_set_optimizerconfig_limited_forecast_horizon_hours: (a: number, b: number) => void;
     readonly __wbg_set_optimizerresult_num_evaluations: (a: number, b: number) => void;
     readonly __wbg_set_optimizerresult_success: (a: number, b: number) => void;
     readonly __wbg_set_simulationconfig_battery_mode: (a: number, b: number) => void;
+    readonly __wbg_set_simulationconfig_limited_forecast_allow_gas_charging: (a: number, b: number) => void;
+    readonly __wbg_set_simulationconfig_limited_forecast_commit_hours: (a: number, b: number) => void;
+    readonly __wbg_set_simulationconfig_limited_forecast_horizon_hours: (a: number, b: number) => void;
     readonly __wbg_simulationconfig_free: (a: number, b: number) => void;
     readonly __wbg_technologycostbreakdown_free: (a: number, b: number) => void;
     readonly simulationconfig_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => number;
@@ -993,6 +1053,9 @@ export interface InitOutput {
     readonly __wbg_set_lcoeresult_total_lcoe: (a: number, b: number) => void;
     readonly __wbg_set_lcoeresult_wind_lcoe: (a: number, b: number) => void;
     readonly __wbg_set_optimizerconfig_battery_efficiency: (a: number, b: number) => void;
+    readonly __wbg_set_optimizerconfig_limited_forecast_peak_value_mwh_per_mw: (a: number, b: number) => void;
+    readonly __wbg_set_optimizerconfig_limited_forecast_renewable_error_pct: (a: number, b: number) => void;
+    readonly __wbg_set_optimizerconfig_limited_forecast_soc_reserve_pct: (a: number, b: number) => void;
     readonly __wbg_set_optimizerconfig_max_clean_firm: (a: number, b: number) => void;
     readonly __wbg_set_optimizerconfig_max_demand_response: (a: number, b: number) => void;
     readonly __wbg_set_optimizerconfig_max_solar: (a: number, b: number) => void;
@@ -1010,6 +1073,9 @@ export interface InitOutput {
     readonly __wbg_set_ordcconfig_reserve_requirement: (a: number, b: number) => void;
     readonly __wbg_set_simulationconfig_battery_efficiency: (a: number, b: number) => void;
     readonly __wbg_set_simulationconfig_clean_firm_capacity: (a: number, b: number) => void;
+    readonly __wbg_set_simulationconfig_limited_forecast_peak_value_mwh_per_mw: (a: number, b: number) => void;
+    readonly __wbg_set_simulationconfig_limited_forecast_renewable_error_pct: (a: number, b: number) => void;
+    readonly __wbg_set_simulationconfig_limited_forecast_soc_reserve_pct: (a: number, b: number) => void;
     readonly __wbg_set_simulationconfig_max_demand_response: (a: number, b: number) => void;
     readonly __wbg_set_simulationconfig_solar_capacity: (a: number, b: number) => void;
     readonly __wbg_set_simulationconfig_storage_capacity: (a: number, b: number) => void;
@@ -1034,6 +1100,9 @@ export interface InitOutput {
     readonly __wbg_get_lcoeresult_total_lcoe: (a: number) => number;
     readonly __wbg_get_lcoeresult_wind_lcoe: (a: number) => number;
     readonly __wbg_get_optimizerconfig_battery_efficiency: (a: number) => number;
+    readonly __wbg_get_optimizerconfig_limited_forecast_peak_value_mwh_per_mw: (a: number) => number;
+    readonly __wbg_get_optimizerconfig_limited_forecast_renewable_error_pct: (a: number) => number;
+    readonly __wbg_get_optimizerconfig_limited_forecast_soc_reserve_pct: (a: number) => number;
     readonly __wbg_get_optimizerconfig_max_clean_firm: (a: number) => number;
     readonly __wbg_get_optimizerconfig_max_demand_response: (a: number) => number;
     readonly __wbg_get_optimizerconfig_max_solar: (a: number) => number;
@@ -1051,6 +1120,9 @@ export interface InitOutput {
     readonly __wbg_get_ordcconfig_reserve_requirement: (a: number) => number;
     readonly __wbg_get_simulationconfig_battery_efficiency: (a: number) => number;
     readonly __wbg_get_simulationconfig_clean_firm_capacity: (a: number) => number;
+    readonly __wbg_get_simulationconfig_limited_forecast_peak_value_mwh_per_mw: (a: number) => number;
+    readonly __wbg_get_simulationconfig_limited_forecast_renewable_error_pct: (a: number) => number;
+    readonly __wbg_get_simulationconfig_limited_forecast_soc_reserve_pct: (a: number) => number;
     readonly __wbg_get_simulationconfig_max_demand_response: (a: number) => number;
     readonly __wbg_get_simulationconfig_solar_capacity: (a: number) => number;
     readonly __wbg_get_simulationconfig_storage_capacity: (a: number) => number;

@@ -12,6 +12,30 @@ fn default_reserve_margin() -> f64 {
     15.0
 }
 
+fn default_limited_forecast_horizon_hours() -> u32 {
+    48
+}
+
+fn default_limited_forecast_commit_hours() -> u32 {
+    24
+}
+
+fn default_limited_forecast_renewable_error_pct() -> f64 {
+    0.0
+}
+
+fn default_limited_forecast_soc_reserve_pct() -> f64 {
+    0.0
+}
+
+fn default_limited_forecast_peak_value() -> f64 {
+    24.0
+}
+
+fn default_limited_forecast_allow_gas_charging() -> bool {
+    true
+}
+
 /// Battery dispatch mode
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -22,6 +46,8 @@ pub enum BatteryMode {
     PeakShaver,
     /// Two-pass: peak shaving + opportunistic dispatch
     Hybrid,
+    /// Rolling 48-hour forecast, committing 24 hours at a time
+    LimitedForecast,
 }
 
 impl Default for BatteryMode {
@@ -48,6 +74,24 @@ pub struct SimulationConfig {
     pub max_demand_response: f64,
     /// Battery dispatch mode
     pub battery_mode: BatteryMode,
+    /// Limited-forecast look-ahead horizon in hours
+    #[serde(default = "default_limited_forecast_horizon_hours")]
+    pub limited_forecast_horizon_hours: u32,
+    /// Limited-forecast committed dispatch block in hours
+    #[serde(default = "default_limited_forecast_commit_hours")]
+    pub limited_forecast_commit_hours: u32,
+    /// Renewable forecast error as a 0-100 persistence blend
+    #[serde(default = "default_limited_forecast_renewable_error_pct")]
+    pub limited_forecast_renewable_error_pct: f64,
+    /// Battery SOC holdback target as percent of storage capacity
+    #[serde(default = "default_limited_forecast_soc_reserve_pct")]
+    pub limited_forecast_soc_reserve_pct: f64,
+    /// Peak value proxy in MWh per MW for limited-forecast objective
+    #[serde(default = "default_limited_forecast_peak_value")]
+    pub limited_forecast_peak_value_mwh_per_mw: f64,
+    /// Whether limited-forecast dispatch can charge from gas/grid
+    #[serde(default = "default_limited_forecast_allow_gas_charging")]
+    pub limited_forecast_allow_gas_charging: bool,
 }
 
 #[wasm_bindgen]
@@ -70,6 +114,12 @@ impl SimulationConfig {
             battery_efficiency,
             max_demand_response,
             battery_mode,
+            limited_forecast_horizon_hours: default_limited_forecast_horizon_hours(),
+            limited_forecast_commit_hours: default_limited_forecast_commit_hours(),
+            limited_forecast_renewable_error_pct: default_limited_forecast_renewable_error_pct(),
+            limited_forecast_soc_reserve_pct: default_limited_forecast_soc_reserve_pct(),
+            limited_forecast_peak_value_mwh_per_mw: default_limited_forecast_peak_value(),
+            limited_forecast_allow_gas_charging: default_limited_forecast_allow_gas_charging(),
         }
     }
 
@@ -82,6 +132,12 @@ impl SimulationConfig {
             battery_efficiency: 0.85,
             max_demand_response: 0.0,
             battery_mode: BatteryMode::Default,
+            limited_forecast_horizon_hours: default_limited_forecast_horizon_hours(),
+            limited_forecast_commit_hours: default_limited_forecast_commit_hours(),
+            limited_forecast_renewable_error_pct: default_limited_forecast_renewable_error_pct(),
+            limited_forecast_soc_reserve_pct: default_limited_forecast_soc_reserve_pct(),
+            limited_forecast_peak_value_mwh_per_mw: default_limited_forecast_peak_value(),
+            limited_forecast_allow_gas_charging: default_limited_forecast_allow_gas_charging(),
         }
     }
 }
@@ -476,6 +532,24 @@ pub struct OptimizerConfig {
     /// Maximum demand response used during optimizer evaluations
     #[serde(default)]
     pub max_demand_response: f64,
+    /// Limited-forecast look-ahead horizon used during optimizer evaluations
+    #[serde(default = "default_limited_forecast_horizon_hours")]
+    pub limited_forecast_horizon_hours: u32,
+    /// Limited-forecast committed dispatch block used during optimizer evaluations
+    #[serde(default = "default_limited_forecast_commit_hours")]
+    pub limited_forecast_commit_hours: u32,
+    /// Renewable forecast error used during optimizer evaluations
+    #[serde(default = "default_limited_forecast_renewable_error_pct")]
+    pub limited_forecast_renewable_error_pct: f64,
+    /// Battery SOC holdback target used during optimizer evaluations
+    #[serde(default = "default_limited_forecast_soc_reserve_pct")]
+    pub limited_forecast_soc_reserve_pct: f64,
+    /// Peak value proxy used during optimizer evaluations
+    #[serde(default = "default_limited_forecast_peak_value")]
+    pub limited_forecast_peak_value_mwh_per_mw: f64,
+    /// Whether optimizer evaluations can charge storage from gas/grid
+    #[serde(default = "default_limited_forecast_allow_gas_charging")]
+    pub limited_forecast_allow_gas_charging: bool,
 }
 
 impl Default for OptimizerConfig {
@@ -492,6 +566,39 @@ impl Default for OptimizerConfig {
             max_clean_firm: 200.0,
             battery_efficiency: default_battery_efficiency(),
             max_demand_response: 0.0,
+            limited_forecast_horizon_hours: default_limited_forecast_horizon_hours(),
+            limited_forecast_commit_hours: default_limited_forecast_commit_hours(),
+            limited_forecast_renewable_error_pct: default_limited_forecast_renewable_error_pct(),
+            limited_forecast_soc_reserve_pct: default_limited_forecast_soc_reserve_pct(),
+            limited_forecast_peak_value_mwh_per_mw: default_limited_forecast_peak_value(),
+            limited_forecast_allow_gas_charging: default_limited_forecast_allow_gas_charging(),
+        }
+    }
+}
+
+impl OptimizerConfig {
+    pub fn simulation_config_for_portfolio(
+        &self,
+        solar_capacity: f64,
+        wind_capacity: f64,
+        storage_capacity: f64,
+        clean_firm_capacity: f64,
+        battery_mode: BatteryMode,
+    ) -> SimulationConfig {
+        SimulationConfig {
+            solar_capacity,
+            wind_capacity,
+            storage_capacity,
+            clean_firm_capacity,
+            battery_efficiency: self.battery_efficiency,
+            max_demand_response: self.max_demand_response,
+            battery_mode,
+            limited_forecast_horizon_hours: self.limited_forecast_horizon_hours,
+            limited_forecast_commit_hours: self.limited_forecast_commit_hours,
+            limited_forecast_renewable_error_pct: self.limited_forecast_renewable_error_pct,
+            limited_forecast_soc_reserve_pct: self.limited_forecast_soc_reserve_pct,
+            limited_forecast_peak_value_mwh_per_mw: self.limited_forecast_peak_value_mwh_per_mw,
+            limited_forecast_allow_gas_charging: self.limited_forecast_allow_gas_charging,
         }
     }
 }

@@ -1340,6 +1340,54 @@ export class OptimizerConfig {
         return ret !== 0;
     }
     /**
+     * Whether optimizer evaluations can charge storage from gas/grid
+     * @returns {boolean}
+     */
+    get limited_forecast_allow_gas_charging() {
+        const ret = wasm.__wbg_get_optimizerconfig_limited_forecast_allow_gas_charging(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * Limited-forecast committed dispatch block used during optimizer evaluations
+     * @returns {number}
+     */
+    get limited_forecast_commit_hours() {
+        const ret = wasm.__wbg_get_optimizerconfig_limited_forecast_commit_hours(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * Limited-forecast look-ahead horizon used during optimizer evaluations
+     * @returns {number}
+     */
+    get limited_forecast_horizon_hours() {
+        const ret = wasm.__wbg_get_optimizerconfig_limited_forecast_horizon_hours(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * Peak value proxy used during optimizer evaluations
+     * @returns {number}
+     */
+    get limited_forecast_peak_value_mwh_per_mw() {
+        const ret = wasm.__wbg_get_costparams_gas_fixed_om(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Renewable forecast error used during optimizer evaluations
+     * @returns {number}
+     */
+    get limited_forecast_renewable_error_pct() {
+        const ret = wasm.__wbg_get_costparams_storage_fixed_om(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Battery SOC holdback target used during optimizer evaluations
+     * @returns {number}
+     */
+    get limited_forecast_soc_reserve_pct() {
+        const ret = wasm.__wbg_get_costparams_clean_firm_fixed_om(this.__wbg_ptr);
+        return ret;
+    }
+    /**
      * Maximum clean firm capacity MW
      * @returns {number}
      */
@@ -1421,6 +1469,48 @@ export class OptimizerConfig {
      */
     set enable_wind(arg0) {
         wasm.__wbg_set_optimizerconfig_enable_wind(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Whether optimizer evaluations can charge storage from gas/grid
+     * @param {boolean} arg0
+     */
+    set limited_forecast_allow_gas_charging(arg0) {
+        wasm.__wbg_set_optimizerconfig_limited_forecast_allow_gas_charging(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Limited-forecast committed dispatch block used during optimizer evaluations
+     * @param {number} arg0
+     */
+    set limited_forecast_commit_hours(arg0) {
+        wasm.__wbg_set_optimizerconfig_limited_forecast_commit_hours(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Limited-forecast look-ahead horizon used during optimizer evaluations
+     * @param {number} arg0
+     */
+    set limited_forecast_horizon_hours(arg0) {
+        wasm.__wbg_set_optimizerconfig_limited_forecast_horizon_hours(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Peak value proxy used during optimizer evaluations
+     * @param {number} arg0
+     */
+    set limited_forecast_peak_value_mwh_per_mw(arg0) {
+        wasm.__wbg_set_costparams_gas_fixed_om(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Renewable forecast error used during optimizer evaluations
+     * @param {number} arg0
+     */
+    set limited_forecast_renewable_error_pct(arg0) {
+        wasm.__wbg_set_costparams_storage_fixed_om(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Battery SOC holdback target used during optimizer evaluations
+     * @param {number} arg0
+     */
+    set limited_forecast_soc_reserve_pct(arg0) {
+        wasm.__wbg_set_costparams_clean_firm_fixed_om(this.__wbg_ptr, arg0);
     }
     /**
      * Maximum clean firm capacity MW
@@ -1735,6 +1825,54 @@ export class SimulationConfig {
         return ret;
     }
     /**
+     * Whether limited-forecast dispatch can charge from gas/grid
+     * @returns {boolean}
+     */
+    get limited_forecast_allow_gas_charging() {
+        const ret = wasm.__wbg_get_simulationconfig_limited_forecast_allow_gas_charging(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * Limited-forecast committed dispatch block in hours
+     * @returns {number}
+     */
+    get limited_forecast_commit_hours() {
+        const ret = wasm.__wbg_get_simulationconfig_limited_forecast_commit_hours(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * Limited-forecast look-ahead horizon in hours
+     * @returns {number}
+     */
+    get limited_forecast_horizon_hours() {
+        const ret = wasm.__wbg_get_simulationconfig_limited_forecast_horizon_hours(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * Peak value proxy in MWh per MW for limited-forecast objective
+     * @returns {number}
+     */
+    get limited_forecast_peak_value_mwh_per_mw() {
+        const ret = wasm.__wbg_get_costparams_clean_firm_fixed_om(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Renewable forecast error as a 0-100 persistence blend
+     * @returns {number}
+     */
+    get limited_forecast_renewable_error_pct() {
+        const ret = wasm.__wbg_get_costparams_wind_fixed_om(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Battery SOC holdback target as percent of storage capacity
+     * @returns {number}
+     */
+    get limited_forecast_soc_reserve_pct() {
+        const ret = wasm.__wbg_get_costparams_storage_fixed_om(this.__wbg_ptr);
+        return ret;
+    }
+    /**
      * Maximum demand response in MW
      * @returns {number}
      */
@@ -1786,6 +1924,48 @@ export class SimulationConfig {
      */
     set clean_firm_capacity(arg0) {
         wasm.__wbg_set_costparams_clean_firm_capex(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Whether limited-forecast dispatch can charge from gas/grid
+     * @param {boolean} arg0
+     */
+    set limited_forecast_allow_gas_charging(arg0) {
+        wasm.__wbg_set_simulationconfig_limited_forecast_allow_gas_charging(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Limited-forecast committed dispatch block in hours
+     * @param {number} arg0
+     */
+    set limited_forecast_commit_hours(arg0) {
+        wasm.__wbg_set_simulationconfig_limited_forecast_commit_hours(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Limited-forecast look-ahead horizon in hours
+     * @param {number} arg0
+     */
+    set limited_forecast_horizon_hours(arg0) {
+        wasm.__wbg_set_simulationconfig_limited_forecast_horizon_hours(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Peak value proxy in MWh per MW for limited-forecast objective
+     * @param {number} arg0
+     */
+    set limited_forecast_peak_value_mwh_per_mw(arg0) {
+        wasm.__wbg_set_costparams_clean_firm_fixed_om(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Renewable forecast error as a 0-100 persistence blend
+     * @param {number} arg0
+     */
+    set limited_forecast_renewable_error_pct(arg0) {
+        wasm.__wbg_set_costparams_wind_fixed_om(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Battery SOC holdback target as percent of storage capacity
+     * @param {number} arg0
+     */
+    set limited_forecast_soc_reserve_pct(arg0) {
+        wasm.__wbg_set_costparams_storage_fixed_om(this.__wbg_ptr, arg0);
     }
     /**
      * Maximum demand response in MW

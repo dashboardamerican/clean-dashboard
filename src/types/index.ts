@@ -24,6 +24,12 @@ export interface SimulationConfig {
   battery_efficiency: number;
   max_demand_response: number;
   battery_mode: BatteryMode;
+  limited_forecast_horizon_hours: number;
+  limited_forecast_commit_hours: number;
+  limited_forecast_renewable_error_pct: number;
+  limited_forecast_soc_reserve_pct: number;
+  limited_forecast_peak_value_mwh_per_mw: number;
+  limited_forecast_allow_gas_charging: boolean;
 }
 
 export interface SimulationResult {
@@ -175,6 +181,12 @@ export interface OptimizerConfig {
   max_clean_firm: number;
   battery_efficiency: number;
   max_demand_response: number;
+  limited_forecast_horizon_hours: number;
+  limited_forecast_commit_hours: number;
+  limited_forecast_renewable_error_pct: number;
+  limited_forecast_soc_reserve_pct: number;
+  limited_forecast_peak_value_mwh_per_mw: number;
+  limited_forecast_allow_gas_charging: boolean;
 }
 
 export interface OptimizerResult {
@@ -279,6 +291,12 @@ export const DEFAULT_SIMULATION_CONFIG: SimulationConfig = {
   battery_efficiency: 0.85,
   max_demand_response: 0,
   battery_mode: BatteryMode.Hybrid, // Hybrid is default - best battery utilization and has pre-computed models
+  limited_forecast_horizon_hours: 48,
+  limited_forecast_commit_hours: 24,
+  limited_forecast_renewable_error_pct: 0,
+  limited_forecast_soc_reserve_pct: 0,
+  limited_forecast_peak_value_mwh_per_mw: 24,
+  limited_forecast_allow_gas_charging: true,
 };
 
 export const DEFAULT_OPTIMIZER_CONFIG: OptimizerConfig = {
@@ -293,6 +311,12 @@ export const DEFAULT_OPTIMIZER_CONFIG: OptimizerConfig = {
   max_clean_firm: 200,
   battery_efficiency: 0.85,
   max_demand_response: 0,
+  limited_forecast_horizon_hours: 48,
+  limited_forecast_commit_hours: 24,
+  limited_forecast_renewable_error_pct: 0,
+  limited_forecast_soc_reserve_pct: 0,
+  limited_forecast_peak_value_mwh_per_mw: 24,
+  limited_forecast_allow_gas_charging: true,
 };
 
 // Zone names
@@ -493,7 +517,7 @@ export interface ResourceSweepPoint {
   clean_match: number;
   lcoe: number;
   /** ELCC values are populated only when the sweep was run with `metric='elcc'`. */
-  first_in_elcc?: number;
+  avg_elcc?: number;
   marginal_elcc?: number;
 }
 

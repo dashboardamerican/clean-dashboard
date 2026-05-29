@@ -19,6 +19,8 @@ use wasm_bindgen::prelude::*;
 pub use economics::{
     calculate_elcc, calculate_land_use, calculate_lcoe, compute_hourly_prices, LandUseResult,
 };
+#[cfg(feature = "experimental-v3")]
+pub use optimizer::run_v3_optimizer;
 pub use optimizer::{
     clear_models,
     get_model,
@@ -53,8 +55,6 @@ pub use optimizer::{
     V2Mode,
     V2StepSchedule,
 };
-#[cfg(feature = "experimental-v3")]
-pub use optimizer::run_v3_optimizer;
 pub use simulation::simulate_system;
 pub use types::*;
 
@@ -589,15 +589,13 @@ pub fn optimize_sweep_with_model(
         match result {
             Ok(r) => {
                 // Run simulation and LCOE calculation to get breakdown
-                let sim_config = SimulationConfig {
-                    solar_capacity: r.solar_capacity,
-                    wind_capacity: r.wind_capacity,
-                    storage_capacity: r.storage_capacity,
-                    clean_firm_capacity: r.clean_firm_capacity,
-                    battery_efficiency: config.battery_efficiency,
-                    max_demand_response: config.max_demand_response,
+                let sim_config = config.simulation_config_for_portfolio(
+                    r.solar_capacity,
+                    r.wind_capacity,
+                    r.storage_capacity,
+                    r.clean_firm_capacity,
                     battery_mode,
-                };
+                );
 
                 let (solar_lcoe, wind_lcoe, storage_lcoe, clean_firm_lcoe, gas_lcoe, gas_capacity) =
                     if let Ok(sim_result) =
@@ -716,31 +714,23 @@ pub fn evaluate_batch(
     let costs: CostParams =
         from_value(costs_js).map_err(|e| JsError::new(&format!("Failed to parse costs: {}", e)))?;
     let runtime_config = match config_js {
-        Some(value) if !value.is_undefined() && !value.is_null() => Some(
+        Some(value) if !value.is_undefined() && !value.is_null() => {
             from_value::<OptimizerConfig>(value)
-                .map_err(|e| JsError::new(&format!("Failed to parse optimizer config: {}", e)))?,
-        ),
-        _ => None,
+                .map_err(|e| JsError::new(&format!("Failed to parse optimizer config: {}", e)))?
+        }
+        _ => OptimizerConfig::default(),
     };
 
     let mut results = Vec::with_capacity(portfolios.len());
 
     for p in portfolios {
-        let config = SimulationConfig {
-            solar_capacity: p.solar,
-            wind_capacity: p.wind,
-            storage_capacity: p.storage,
-            clean_firm_capacity: p.clean_firm,
-            battery_efficiency: runtime_config
-                .as_ref()
-                .map(|cfg| cfg.battery_efficiency)
-                .unwrap_or(0.85),
-            max_demand_response: runtime_config
-                .as_ref()
-                .map(|cfg| cfg.max_demand_response)
-                .unwrap_or(0.0),
+        let config = runtime_config.simulation_config_for_portfolio(
+            p.solar,
+            p.wind,
+            p.storage,
+            p.clean_firm,
             battery_mode,
-        };
+        );
 
         match simulate_system(&config, &solar_profile, &wind_profile, &load_profile) {
             Ok(sim_result) => {
@@ -785,6 +775,11 @@ pub fn battery_mode_peak_shaver() -> BatteryMode {
 #[wasm_bindgen]
 pub fn battery_mode_hybrid() -> BatteryMode {
     BatteryMode::Hybrid
+}
+
+#[wasm_bindgen]
+pub fn battery_mode_limited_forecast() -> BatteryMode {
+    BatteryMode::LimitedForecast
 }
 
 // ============================================================================
@@ -1244,15 +1239,13 @@ pub fn run_optimizer_sweep(
         match result {
             Ok(r) => {
                 // Run simulation and LCOE calculation to get breakdown
-                let sim_config = SimulationConfig {
-                    solar_capacity: r.solar_capacity,
-                    wind_capacity: r.wind_capacity,
-                    storage_capacity: r.storage_capacity,
-                    clean_firm_capacity: r.clean_firm_capacity,
-                    battery_efficiency: config.battery_efficiency,
-                    max_demand_response: config.max_demand_response,
+                let sim_config = config.simulation_config_for_portfolio(
+                    r.solar_capacity,
+                    r.wind_capacity,
+                    r.storage_capacity,
+                    r.clean_firm_capacity,
                     battery_mode,
-                };
+                );
 
                 let (solar_lcoe, wind_lcoe, storage_lcoe, clean_firm_lcoe, gas_lcoe, gas_capacity) =
                     if let Ok(sim_result) =

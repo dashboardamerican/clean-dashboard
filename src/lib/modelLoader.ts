@@ -9,6 +9,12 @@
 
 import { BatteryMode } from '../types';
 
+const debugLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) {
+    console.log(...args);
+  }
+};
+
 // Default model path (can be overridden for CDN deployment)
 const MODEL_BASE_PATH = '/models';
 
@@ -52,7 +58,7 @@ export async function fetchModel(
   const modeName = BATTERY_MODE_NAMES[batteryMode];
   const url = `${MODEL_BASE_PATH}/${normalizedZone}_${modeName}.bin`;
 
-  console.log(`[ModelLoader] Fetching model: ${url}`);
+  debugLog(`[ModelLoader] Fetching model: ${url}`);
 
   const response = await fetch(url);
   if (!response.ok) {
@@ -60,7 +66,7 @@ export async function fetchModel(
   }
 
   const arrayBuffer = await response.arrayBuffer();
-  console.log(`[ModelLoader] Model fetched: ${arrayBuffer.byteLength} bytes`);
+  debugLog(`[ModelLoader] Model fetched: ${arrayBuffer.byteLength} bytes`);
 
   return new Uint8Array(arrayBuffer);
 }
@@ -84,7 +90,7 @@ export async function loadModel(
 
   // Check if already loaded
   if (isModelLoaded(zone, batteryMode)) {
-    console.log(`[ModelLoader] Model already cached: ${zone}/${batteryMode}`);
+    debugLog(`[ModelLoader] Model already cached: ${zone}/${batteryMode}`);
     return;
   }
 
@@ -94,7 +100,7 @@ export async function loadModel(
   // Load into WASM cache
   wasm.wasm_load_model(zone, batteryMode, bytes);
 
-  console.log(`[ModelLoader] Model loaded into cache: ${zone}/${batteryMode}`);
+  debugLog(`[ModelLoader] Model loaded into cache: ${zone}/${batteryMode}`);
 }
 
 /**
@@ -116,7 +122,7 @@ export function clearModels(): void {
   const wasm = getWasmModule();
   if (wasm && wasm.wasm_clear_models) {
     wasm.wasm_clear_models();
-    console.log('[ModelLoader] Model cache cleared');
+    debugLog('[ModelLoader] Model cache cleared');
   }
 }
 
@@ -158,11 +164,11 @@ export function preloadModel(
 ): Promise<void> {
   // Only Hybrid mode models are available
   if (!hasModel(zone, batteryMode)) {
-    console.log(`[ModelLoader] Skipping preload for ${zone}/${batteryMode} (no model available)`);
+    debugLog(`[ModelLoader] Skipping preload for ${zone}/${batteryMode} (no model available)`);
     return Promise.resolve();
   }
 
-  console.log(`[ModelLoader] Preloading model for ${zone}/${batteryMode}`);
+  debugLog(`[ModelLoader] Preloading model for ${zone}/${batteryMode}`);
   return loadModel(zone, batteryMode).catch((err) => {
     console.warn(`[ModelLoader] Failed to preload model for ${zone}/${batteryMode}:`, err);
     // Don't throw - preload failures are non-critical
@@ -263,11 +269,11 @@ export function getAvailableZones(): string[] {
 export function hasModel(zone: string, batteryMode?: BatteryMode): boolean {
   // Only Hybrid mode models are available
   if (batteryMode !== undefined && batteryMode !== BatteryMode.Hybrid) {
-    console.log(`[ModelLoader] hasModel(${zone}, ${batteryMode}) = false (not Hybrid mode)`);
+    debugLog(`[ModelLoader] hasModel(${zone}, ${batteryMode}) = false (not Hybrid mode)`);
     return false;
   }
   const availableZones = getAvailableZones().map((z) => z.toLowerCase());
   const result = availableZones.includes(zone.toLowerCase());
-  console.log(`[ModelLoader] hasModel(${zone}, ${batteryMode}) = ${result}`);
+  debugLog(`[ModelLoader] hasModel(${zone}, ${batteryMode}) = ${result}`);
   return result;
 }

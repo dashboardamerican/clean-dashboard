@@ -5,7 +5,7 @@
 /// clean match percentage.
 use crate::economics::calculate_lcoe;
 use crate::simulation::simulate_system;
-use crate::types::{BatteryMode, CostParams, OptimizerConfig, SimulationConfig};
+use crate::types::{BatteryMode, CostParams, OptimizerConfig};
 
 /// Evaluation result for a portfolio configuration
 #[derive(Clone, Debug)]
@@ -31,17 +31,15 @@ pub fn evaluate_portfolio(
     config: &OptimizerConfig,
     battery_mode: BatteryMode,
 ) -> Result<EvalResult, String> {
-    let simulation_config = SimulationConfig {
-        solar_capacity: solar,
-        wind_capacity: wind,
-        storage_capacity: storage,
-        clean_firm_capacity: clean_firm,
-        battery_efficiency: config.battery_efficiency,
-        max_demand_response: config.max_demand_response,
-        battery_mode,
-    };
+    let simulation_config =
+        config.simulation_config_for_portfolio(solar, wind, storage, clean_firm, battery_mode);
 
-    let sim_result = simulate_system(&simulation_config, solar_profile, wind_profile, load_profile)?;
+    let sim_result = simulate_system(
+        &simulation_config,
+        solar_profile,
+        wind_profile,
+        load_profile,
+    )?;
     let lcoe_result = calculate_lcoe(&sim_result, solar, wind, storage, clean_firm, costs);
 
     Ok(EvalResult {

@@ -1,9 +1,13 @@
 pub mod default;
 pub mod hybrid;
+pub mod limited_forecast;
 pub mod peak_shaver;
 
 pub use default::apply_default_dispatch;
 pub use hybrid::apply_hybrid_dispatch;
+pub use limited_forecast::{
+    apply_limited_forecast_dispatch, apply_limited_forecast_dispatch_with_settings,
+};
 pub use peak_shaver::{apply_peak_shaver_dispatch, find_optimal_peak_line, test_battery_line};
 
 /// Calculate clean energy delivered to load, tracking battery charging source over time.

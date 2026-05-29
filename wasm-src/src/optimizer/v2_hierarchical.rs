@@ -18,7 +18,7 @@ use crate::economics::calculate_lcoe;
 use crate::optimizer::cache::{CachedResult, EvalCache};
 use crate::optimizer::empirical_model::{EmpiricalModel, Portfolio};
 use crate::simulation::simulate_system;
-use crate::types::{BatteryMode, CostParams, OptimizerConfig, OptimizerResult, SimulationConfig};
+use crate::types::{BatteryMode, CostParams, OptimizerConfig, OptimizerResult};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 #[cfg(not(target_arch = "wasm32"))]
@@ -254,17 +254,15 @@ fn evaluate_cached(
     }
 
     // Full evaluation
-    let simulation_config = SimulationConfig {
-        solar_capacity: solar,
-        wind_capacity: wind,
-        storage_capacity: storage,
-        clean_firm_capacity: clean_firm,
-        battery_efficiency: config.battery_efficiency,
-        max_demand_response: config.max_demand_response,
-        battery_mode,
-    };
+    let simulation_config =
+        config.simulation_config_for_portfolio(solar, wind, storage, clean_firm, battery_mode);
 
-    let sim_result = simulate_system(&simulation_config, solar_profile, wind_profile, load_profile)?;
+    let sim_result = simulate_system(
+        &simulation_config,
+        solar_profile,
+        wind_profile,
+        load_profile,
+    )?;
     let lcoe_result = calculate_lcoe(&sim_result, solar, wind, storage, clean_firm, costs);
 
     // Store in cache
@@ -729,7 +727,12 @@ fn select_multistart_seeds(
     let mut seen = HashSet::new();
     let mut seeds = Vec::new();
     for candidate in points {
-        if budget_exhausted(polish_start_ms, extra_ms_budget, *extra_evals, max_extra_evals) {
+        if budget_exhausted(
+            polish_start_ms,
+            extra_ms_budget,
+            *extra_evals,
+            max_extra_evals,
+        ) {
             break;
         }
         if !seen.insert(portfolio_key(
@@ -797,7 +800,12 @@ fn polish_seed_local(
     let mut first_stage_improved = false;
 
     for (stage_idx, stage) in stage_schedule.iter().enumerate() {
-        if budget_exhausted(polish_start_ms, extra_ms_budget, *extra_evals, max_extra_evals) {
+        if budget_exhausted(
+            polish_start_ms,
+            extra_ms_budget,
+            *extra_evals,
+            max_extra_evals,
+        ) {
             break;
         }
         let sw_step = stage.0;
@@ -833,7 +841,12 @@ fn polish_seed_local(
 
         let moves = generate_stage_moves(sw_step, st_step, cf_step, config);
         for (ds, dw, dst, dcf) in moves {
-            if budget_exhausted(polish_start_ms, extra_ms_budget, *extra_evals, max_extra_evals) {
+            if budget_exhausted(
+                polish_start_ms,
+                extra_ms_budget,
+                *extra_evals,
+                max_extra_evals,
+            ) {
                 break;
             }
 
@@ -953,9 +966,12 @@ fn run_v2_accurate_polish(
     )?;
 
     for (seed_idx, seed) in seeds.iter().enumerate() {
-        if let Some(reason) =
-            budget_stop_reason(polish_start_ms, extra_ms_budget, extra_evals, max_extra_evals)
-        {
+        if let Some(reason) = budget_stop_reason(
+            polish_start_ms,
+            extra_ms_budget,
+            extra_evals,
+            max_extra_evals,
+        ) {
             stop_reason = reason;
             break;
         }
@@ -997,9 +1013,12 @@ fn run_v2_accurate_polish(
     }
 
     if stop_reason == V2AccurateStopReason::CompletedSchedule {
-        if let Some(reason) =
-            budget_stop_reason(polish_start_ms, extra_ms_budget, extra_evals, max_extra_evals)
-        {
+        if let Some(reason) = budget_stop_reason(
+            polish_start_ms,
+            extra_ms_budget,
+            extra_evals,
+            max_extra_evals,
+        ) {
             stop_reason = reason;
         } else if !any_improvement && !better_eval_candidate(&best, &start_eval, target) {
             stop_reason = V2AccurateStopReason::NoFurtherImprovement;

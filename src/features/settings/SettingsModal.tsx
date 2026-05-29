@@ -46,10 +46,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         return (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
-              <Slider label="Solar ($/kW)" value={costs.solar_capex} min={500} max={2000} onChange={(v) => setCost('solar_capex', v)} />
-              <Slider label="Wind ($/kW)" value={costs.wind_capex} min={800} max={2500} onChange={(v) => setCost('wind_capex', v)} />
-              <Slider label="Storage ($/kWh)" value={costs.storage_capex} min={100} max={600} onChange={(v) => setCost('storage_capex', v)} />
-              <Slider label="Clean Firm ($/kW)" value={costs.clean_firm_capex} min={2000} max={10000} step={100} onChange={(v) => setCost('clean_firm_capex', v)} />
+              <Slider label="Solar ($/kW)" value={costs.solar_capex} min={100} max={2000} onChange={(v) => setCost('solar_capex', v)} />
+              <Slider label="Wind ($/kW)" value={costs.wind_capex} min={400} max={2500} onChange={(v) => setCost('wind_capex', v)} />
+              <Slider label="Storage ($/kWh)" value={costs.storage_capex} min={25} max={600} onChange={(v) => setCost('storage_capex', v)} />
+              <Slider label="Clean Firm ($/kW)" value={costs.clean_firm_capex} min={1000} max={10000} step={100} onChange={(v) => setCost('clean_firm_capex', v)} />
               <Slider label="Gas ($/kW)" value={costs.gas_capex} min={500} max={4500} onChange={(v) => setCost('gas_capex', v)} />
             </div>
 

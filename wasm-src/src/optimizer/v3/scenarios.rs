@@ -389,6 +389,7 @@ fn build_suite(suite: &str) -> Result<Vec<ScenarioDefinition>, String> {
         max_clean_firm: 100.0,
         battery_efficiency: 0.85,
         max_demand_response: 0.0,
+        ..OptimizerConfig::default()
     };
 
     let mk_v3_search = |target: f64, optimizer_config: &OptimizerConfig, radius: usize| {
@@ -429,10 +430,10 @@ fn build_suite(suite: &str) -> Result<Vec<ScenarioDefinition>, String> {
     };
 
     let mk_default_case = |name: &str,
-                          target: f64,
-                          costs: &CostParams,
-                          profiles: &Profiles,
-                          use_fine_oracle: bool| {
+                           target: f64,
+                           costs: &CostParams,
+                           profiles: &Profiles,
+                           use_fine_oracle: bool| {
         let optimizer_config = config_from_search(target, &base_config);
         let use_fine_oracle = if use_fine_oracle {
             Some(fine_cfg.clone())
@@ -560,14 +561,62 @@ fn build_suite(suite: &str) -> Result<Vec<ScenarioDefinition>, String> {
     ));
 
     let hardest = vec![
-        mk_default_case("hardest_synthetic_target_30", 30.0, &default_costs, &synthetic, false),
-        mk_default_case("hardest_synthetic_target_40", 40.0, &default_costs, &synthetic, false),
-        mk_default_case("hardest_synthetic_target_70", 70.0, &default_costs, &synthetic, true),
-        mk_default_case("hardest_california_target_80", 80.0, &default_costs, &california, false),
-        mk_default_case("hardest_southeast_target_95", 95.0, &default_costs, &southeast, true),
-        mk_default_case("hardest_texas_target_30_expensive_gas", 30.0, &expensive_gas_costs, &texas, false),
-        mk_default_case("hardest_florida_target_90", 90.0, &default_costs, &florida, false),
-        mk_default_case("hardest_newyork_target_95", 95.0, &default_costs, &new_york, false),
+        mk_default_case(
+            "hardest_synthetic_target_30",
+            30.0,
+            &default_costs,
+            &synthetic,
+            false,
+        ),
+        mk_default_case(
+            "hardest_synthetic_target_40",
+            40.0,
+            &default_costs,
+            &synthetic,
+            false,
+        ),
+        mk_default_case(
+            "hardest_synthetic_target_70",
+            70.0,
+            &default_costs,
+            &synthetic,
+            true,
+        ),
+        mk_default_case(
+            "hardest_california_target_80",
+            80.0,
+            &default_costs,
+            &california,
+            false,
+        ),
+        mk_default_case(
+            "hardest_southeast_target_95",
+            95.0,
+            &default_costs,
+            &southeast,
+            true,
+        ),
+        mk_default_case(
+            "hardest_texas_target_30_expensive_gas",
+            30.0,
+            &expensive_gas_costs,
+            &texas,
+            false,
+        ),
+        mk_default_case(
+            "hardest_florida_target_90",
+            90.0,
+            &default_costs,
+            &florida,
+            false,
+        ),
+        mk_default_case(
+            "hardest_newyork_target_95",
+            95.0,
+            &default_costs,
+            &new_york,
+            false,
+        ),
     ];
 
     let mut comprehensive = quick.clone();
@@ -575,18 +624,54 @@ fn build_suite(suite: &str) -> Result<Vec<ScenarioDefinition>, String> {
         ("standard_northeast_85", &northeast, 85.0, false),
         ("standard_northeast_95", &northeast, 95.0, true),
         ("standard_florida_99", &florida, 99.0, true),
-        ("standard_delta_95", &get_zone_profiles(&zones, "delta")?, 95.0, false),
-        ("standard_mountain_95", &get_zone_profiles(&zones, "mountain")?, 95.0, false),
-        ("standard_northwest_99", &get_zone_profiles(&zones, "northwest")?, 99.0, false),
-        ("standard_midwest_90", &get_zone_profiles(&zones, "midwest")?, 90.0, false),
-        ("standard_plains_90", &get_zone_profiles(&zones, "plains")?, 90.0, false),
-        ("standard_plains_95", &get_zone_profiles(&zones, "plains")?, 95.0, false),
+        (
+            "standard_delta_95",
+            &get_zone_profiles(&zones, "delta")?,
+            95.0,
+            false,
+        ),
+        (
+            "standard_mountain_95",
+            &get_zone_profiles(&zones, "mountain")?,
+            95.0,
+            false,
+        ),
+        (
+            "standard_northwest_99",
+            &get_zone_profiles(&zones, "northwest")?,
+            99.0,
+            false,
+        ),
+        (
+            "standard_midwest_90",
+            &get_zone_profiles(&zones, "midwest")?,
+            90.0,
+            false,
+        ),
+        (
+            "standard_plains_90",
+            &get_zone_profiles(&zones, "plains")?,
+            90.0,
+            false,
+        ),
+        (
+            "standard_plains_95",
+            &get_zone_profiles(&zones, "plains")?,
+            95.0,
+            false,
+        ),
         ("standard_mid_atlantic_90", &northeast, 90.0, false),
     ];
 
     comprehensive.extend(standard.clone());
     for (name, profile, target, use_fine_oracle) in zone_mix {
-        comprehensive.push(mk_default_case(name, target, &default_costs, profile, use_fine_oracle));
+        comprehensive.push(mk_default_case(
+            name,
+            target,
+            &default_costs,
+            profile,
+            use_fine_oracle,
+        ));
     }
     comprehensive.push(mk_default_case(
         "comprehensive_synthetic_85",

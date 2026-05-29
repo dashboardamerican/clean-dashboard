@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react';
 import { BatteryMode, PricingMethod } from '../types';
 
+const debugLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) {
+    console.log(...args);
+  }
+};
+
 // Type for the WASM module exports
 export interface WasmModule {
   get_version: () => string;
@@ -128,7 +134,7 @@ export function useWasm(): UseWasmResult {
         setWasmModule(wasm as unknown as WasmModule);
         setLoading(false);
 
-        console.log(`WASM module loaded. Version: ${wasm.get_version()}`);
+        debugLog(`WASM module loaded. Version: ${wasm.get_version()}`);
       } catch (err) {
         console.error('Failed to load WASM module:', err);
         setError(err instanceof Error ? err.message : 'Failed to load WASM module');

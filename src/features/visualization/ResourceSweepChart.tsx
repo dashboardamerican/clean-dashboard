@@ -177,18 +177,19 @@ export const ResourceSweepChart: React.FC = () => {
   });
   const subtitle = fixedParts.join(' • ');
 
-  // ELCC mode plots two traces (Avg = First-In, Marginal); other modes plot one.
+  // ELCC mode plots two traces (average from the zero-swept-resource baseline
+  // and marginal over each sweep interval); other modes plot one.
   let traces: any[] = [];
   let allY: number[] = [];
 
   if (resourceSweepMetric === 'elcc') {
-    const firstIn = points.map((p) => p.first_in_elcc ?? NaN);
+    const average = points.map((p) => p.avg_elcc ?? NaN);
     const marginal = points.map((p) => p.marginal_elcc ?? NaN);
-    allY = [...firstIn, ...marginal].filter((y) => Number.isFinite(y));
+    allY = [...average, ...marginal].filter((y) => Number.isFinite(y));
     traces = [
       {
         x: xValues,
-        y: firstIn,
+        y: average,
         name: `${resourceLabel} Avg ELCC`,
         type: 'scatter',
         mode: 'lines+markers',
@@ -341,7 +342,7 @@ export const ResourceSweepChart: React.FC = () => {
                   {resourceSweepMetric === 'elcc' && (
                     <>
                       <td className="text-right py-1 px-2">
-                        {p.first_in_elcc !== undefined ? `${p.first_in_elcc.toFixed(1)}%` : '—'}
+                        {p.avg_elcc !== undefined ? `${p.avg_elcc.toFixed(1)}%` : '—'}
                       </td>
                       <td className="text-right py-1 px-2">
                         {p.marginal_elcc !== undefined ? `${p.marginal_elcc.toFixed(1)}%` : '—'}

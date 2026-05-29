@@ -3,8 +3,8 @@
 /// Main entry point for running 8760-hour chronological energy system simulation.
 /// Supports multiple battery dispatch strategies and calculates all output arrays.
 use crate::simulation::battery::{
-    apply_default_dispatch, apply_hybrid_dispatch, apply_peak_shaver_dispatch,
-    calculate_clean_delivered,
+    apply_default_dispatch, apply_hybrid_dispatch, apply_limited_forecast_dispatch_with_settings,
+    apply_peak_shaver_dispatch, calculate_clean_delivered,
 };
 use crate::types::{BatteryMode, SimulationConfig, SimulationResult, HOURS_PER_YEAR};
 
@@ -107,13 +107,33 @@ pub fn simulate_system(
             result.gas_for_charging = gas_for_charge;
         }
         BatteryMode::Hybrid => {
+            let (charge, discharge, soc, curtailed, gas_for_charge) = apply_hybrid_dispatch(
+                &renewable_gen,
+                &effective_load,
+                config.clean_firm_capacity,
+                config.storage_capacity,
+                config.battery_efficiency,
+            );
+            result.battery_charge = charge;
+            result.battery_discharge = discharge;
+            result.state_of_charge = soc;
+            result.curtailed = curtailed;
+            result.gas_for_charging = gas_for_charge;
+        }
+        BatteryMode::LimitedForecast => {
             let (charge, discharge, soc, curtailed, gas_for_charge) =
-                apply_hybrid_dispatch(
+                apply_limited_forecast_dispatch_with_settings(
                     &renewable_gen,
                     &effective_load,
                     config.clean_firm_capacity,
                     config.storage_capacity,
                     config.battery_efficiency,
+                    config.limited_forecast_horizon_hours as usize,
+                    config.limited_forecast_commit_hours as usize,
+                    config.limited_forecast_soc_reserve_pct / 100.0,
+                    config.limited_forecast_peak_value_mwh_per_mw,
+                    config.limited_forecast_renewable_error_pct,
+                    config.limited_forecast_allow_gas_charging,
                 );
             result.battery_charge = charge;
             result.battery_discharge = discharge;
@@ -280,6 +300,7 @@ mod tests {
             BatteryMode::Default,
             BatteryMode::PeakShaver,
             BatteryMode::Hybrid,
+            BatteryMode::LimitedForecast,
         ] {
             let mut config = SimulationConfig::with_defaults();
             config.solar_capacity = 150.0;

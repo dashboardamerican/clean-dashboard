@@ -53,7 +53,13 @@ pub fn apply_hybrid_dispatch(
             curtailed[i] = (total_clean - load[i]).max(0.0);
         }
 
-        return (zeros.clone(), zeros.clone(), zeros.clone(), curtailed, zeros);
+        return (
+            zeros.clone(),
+            zeros.clone(),
+            zeros.clone(),
+            curtailed,
+            zeros,
+        );
     }
 
     // Pass 1: Peak shaver establishes baseline
@@ -91,7 +97,13 @@ pub fn apply_hybrid_dispatch(
         battery_eff,
     );
 
-    (battery_charge, battery_discharge, soc, curtailed, gas_for_charging)
+    (
+        battery_charge,
+        battery_discharge,
+        soc,
+        curtailed,
+        gas_for_charging,
+    )
 }
 
 /// Pass 2: Look for opportunistic discharge/recharge cycles

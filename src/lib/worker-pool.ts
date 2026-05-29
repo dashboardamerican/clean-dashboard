@@ -13,6 +13,12 @@ import type {
   SweepPoint,
 } from '../types';
 
+const debugLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) {
+    console.log(...args);
+  }
+};
+
 // WASM-compatible cost params (depreciation_method is a string)
 export type WasmCostParams = Record<string, number | string | boolean>;
 
@@ -142,7 +148,7 @@ export class SimulatorWorkerPool {
     this.ready = Promise.all(workerPromises)
       .then(() => {
         this.isReady = true;
-        console.log(`Worker pool ready: ${this.workers.length} workers`);
+        debugLog(`Worker pool ready: ${this.workers.length} workers`);
       })
       .catch((e) => {
         console.error('Worker pool initialization failed:', e);
@@ -269,7 +275,7 @@ export class SimulatorWorkerPool {
     );
 
     await Promise.all(promises);
-    console.log(`[WorkerPool] Model loaded in all ${this.workers.length} workers`);
+    debugLog(`[WorkerPool] Model loaded in all ${this.workers.length} workers`);
   }
 
   /**

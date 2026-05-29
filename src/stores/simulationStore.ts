@@ -13,6 +13,12 @@ import {
 import { preloadModel } from '../lib/modelLoader'
 import { serializeCostParams, serializeSimulationConfig } from '../lib/wasmSerde'
 
+const debugLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) {
+    console.log(...args);
+  }
+};
+
 // Zone data cache
 let zoneDataCache: Record<string, { solar: number[]; wind: number[]; load: number[] }> | null = null;
 
@@ -199,13 +205,13 @@ export const useSimulationStore = create<SimulationState>()(
 
       loadInitialZoneData: async () => {
         const state = get();
-        console.log('loadInitialZoneData called, zoneDataLoaded:', state.zoneDataLoaded);
+        debugLog('loadInitialZoneData called, zoneDataLoaded:', state.zoneDataLoaded);
         if (state.zoneDataLoaded) return;
 
         try {
-          console.log('Loading zone data for:', state.zone);
+          debugLog('Loading zone data for:', state.zone);
           const zoneData = await loadZoneData(state.zone);
-          console.log('Zone data loaded:', {
+          debugLog('Zone data loaded:', {
             zone: state.zone,
             solarLength: zoneData.solar.length,
             windLength: zoneData.wind.length,
@@ -275,8 +281,7 @@ export const useSimulationStore = create<SimulationState>()(
 
           const wasmConfig = serializeSimulationConfig(state.config);
 
-          // Debug: log inputs
-          console.log('Simulation inputs:', {
+          debugLog('Simulation inputs:', {
             config: wasmConfig,
             profileLengths: {
               solar: solarFloat.length,
@@ -296,26 +301,27 @@ export const useSimulationStore = create<SimulationState>()(
             wasmCosts
           );
 
-          // Debug: log outputs including battery data
-          const sim = result.simulation;
-          const totalCharge = sim?.battery_charge?.reduce((a: number, b: number) => a + b, 0) || 0;
-          const totalDischarge = sim?.battery_discharge?.reduce((a: number, b: number) => a + b, 0) || 0;
-          const totalGasCharge = sim?.gas_for_charging?.reduce((a: number, b: number) => a + b, 0) || 0;
-          const chargeHours = sim?.battery_charge?.filter((x: number) => x > 0.01).length || 0;
-          const dischargeHours = sim?.battery_discharge?.filter((x: number) => x > 0.01).length || 0;
-          console.log('Simulation result:', {
-            clean_match_pct: sim?.clean_match_pct,
-            peak_gas: sim?.peak_gas,
-            total_lcoe: result.lcoe?.total_lcoe,
-            annual_load: sim?.annual_load,
-            battery: {
-              totalCharge: totalCharge.toFixed(0),
-              totalDischarge: totalDischarge.toFixed(0),
-              totalGasCharge: totalGasCharge.toFixed(0),
-              chargeHours,
-              dischargeHours,
-            },
-          });
+          if (import.meta.env.DEV) {
+            const sim = result.simulation;
+            const totalCharge = sim?.battery_charge?.reduce((a: number, b: number) => a + b, 0) || 0;
+            const totalDischarge = sim?.battery_discharge?.reduce((a: number, b: number) => a + b, 0) || 0;
+            const totalGasCharge = sim?.gas_for_charging?.reduce((a: number, b: number) => a + b, 0) || 0;
+            const chargeHours = sim?.battery_charge?.filter((x: number) => x > 0.01).length || 0;
+            const dischargeHours = sim?.battery_discharge?.filter((x: number) => x > 0.01).length || 0;
+            debugLog('Simulation result:', {
+              clean_match_pct: sim?.clean_match_pct,
+              peak_gas: sim?.peak_gas,
+              total_lcoe: result.lcoe?.total_lcoe,
+              annual_load: sim?.annual_load,
+              battery: {
+                totalCharge: totalCharge.toFixed(0),
+                totalDischarge: totalDischarge.toFixed(0),
+                totalGasCharge: totalGasCharge.toFixed(0),
+                chargeHours,
+                dischargeHours,
+              },
+            });
+          }
 
           set((s) => {
             s.simulationResult = result.simulation;

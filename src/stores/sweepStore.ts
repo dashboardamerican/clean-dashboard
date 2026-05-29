@@ -13,8 +13,20 @@ import {
 import { useSimulationStore } from './simulationStore'
 import { useSettingsStore } from './settingsStore'
 import { ensureModelLoaded, fetchModel } from '../lib/modelLoader'
+import { calculateResourceSweepElcc } from '../lib/resourceSweepElcc'
 import { getWorkerPool } from '../lib/worker-pool'
-import { serializeBatteryMode, serializeCostParams, withOptimizerRuntimeConfig } from '../lib/wasmSerde'
+import {
+  serializeBatteryMode,
+  serializeCostParams,
+  serializeSimulationConfig,
+  withOptimizerRuntimeConfig,
+} from '../lib/wasmSerde'
+
+const debugLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) {
+    console.log(...args);
+  }
+};
 
 // Default sweep targets (0% to 100% in 10% increments + high-end detail).
 // 99.5 included to fill the often-discontinuous 99 → 100 jump where the
@@ -145,13 +157,13 @@ export const useSweepStore = create<SweepState>()(
         // Set default ranges based on parameter
         switch (param) {
           case 'solar_capex':
-            state.costSweepRange = [500, 2000];
+            state.costSweepRange = [100, 2000];
             break;
           case 'wind_capex':
-            state.costSweepRange = [800, 2500];
+            state.costSweepRange = [400, 2500];
             break;
           case 'storage_capex':
-            state.costSweepRange = [100, 600];
+            state.costSweepRange = [25, 600];
             break;
           case 'clean_firm_capex':
             state.costSweepRange = [1000, 12000];
@@ -244,7 +256,7 @@ export const useSweepStore = create<SweepState>()(
 
         // Try to load model for faster optimization (non-blocking on failure)
         const modelStatus = await ensureModelLoaded(zone, config.battery_mode);
-        console.log(`[OptimizerSweep] Model for ${zone}/${batteryModeStr}: loaded=${modelStatus.loaded}, resources=${JSON.stringify(sweepResources)}`);
+        debugLog(`[OptimizerSweep] Model for ${zone}/${batteryModeStr}: loaded=${modelStatus.loaded}, resources=${JSON.stringify(sweepResources)}`);
 
         // Capture timing on frontend (WASM can't use std::time::Instant)
         const startTime = performance.now();
@@ -256,13 +268,13 @@ export const useSweepStore = create<SweepState>()(
 
         // Wait for pool to be ready (with timeout)
         if (useWorkers && !pool.isPoolReady()) {
-          console.log('[OptimizerSweep] Waiting for worker pool to initialize...');
+          debugLog('[OptimizerSweep] Waiting for worker pool to initialize...');
           await pool.waitForReady(5000); // 5 second timeout
         }
 
-        console.log(`[OptimizerSweep] useWorkers=${useWorkers}, poolReady=${pool.isPoolReady()}, workerCount=${pool.getWorkerCount()}`);
+        debugLog(`[OptimizerSweep] useWorkers=${useWorkers}, poolReady=${pool.isPoolReady()}, workerCount=${pool.getWorkerCount()}`);
         if (useWorkers && pool.isPoolReady()) {
-          console.log(`[OptimizerSweep] Using ${pool.getWorkerCount()} workers for parallel sweep`);
+          debugLog(`[OptimizerSweep] Using ${pool.getWorkerCount()} workers for parallel sweep`);
 
           // Load model in workers if available
           if (modelStatus.loaded) {
@@ -324,7 +336,7 @@ export const useSweepStore = create<SweepState>()(
           state.isRunning = false;
         });
 
-        console.log(`Optimizer sweep completed in ${elapsed_ms.toFixed(0)}ms (model=${modelStatus.loaded}, workers=${useWorkers && pool.isPoolReady()})`);
+        debugLog(`Optimizer sweep completed in ${elapsed_ms.toFixed(0)}ms (model=${modelStatus.loaded}, workers=${useWorkers && pool.isPoolReady()})`);
       } catch (error) {
         console.error('Optimizer sweep error:', error);
         set((state) => {
@@ -361,7 +373,7 @@ export const useSweepStore = create<SweepState>()(
 
         // Try to load model for faster optimization (non-blocking on failure)
         const modelStatus = await ensureModelLoaded(zone, config.battery_mode);
-        console.log(`[CostSweep] Model for ${zone}/${batteryModeStr}: loaded=${modelStatus.loaded}`);
+        debugLog(`[CostSweep] Model for ${zone}/${batteryModeStr}: loaded=${modelStatus.loaded}`);
 
         // Capture timing on frontend (WASM can't use std::time::Instant)
         const startTime = performance.now();
@@ -412,7 +424,7 @@ export const useSweepStore = create<SweepState>()(
           state.isRunning = false;
         });
 
-        console.log(`Cost sweep completed in ${elapsed_ms.toFixed(0)}ms (model=${modelStatus.loaded})`);
+        debugLog(`Cost sweep completed in ${elapsed_ms.toFixed(0)}ms (model=${modelStatus.loaded})`);
       } catch (error) {
         console.error('Cost sweep error:', error);
         set((state) => {
@@ -470,14 +482,18 @@ export const useSweepStore = create<SweepState>()(
 
         const startTime = performance.now();
 
-        // evaluate_batch returns [{solar, wind, storage, clean_firm, lcoe, clean_match}, ...]
+        const solarF = new Float64Array(solarProfile);
+        const windF = new Float64Array(windProfile);
+        const loadF = new Float64Array(loadProfile);
+
+        // evaluate_batch returns [{solar, wind, storage, clean_firm, lcoe, clean_match}, ...].
         // The optimizer config carries battery_efficiency and max_demand_response.
         const optimizerConfig = withOptimizerRuntimeConfig(DEFAULT_OPTIMIZER_CONFIG, config);
         const rawResults = wasm.evaluate_batch(
           portfolios,
-          new Float64Array(solarProfile),
-          new Float64Array(windProfile),
-          new Float64Array(loadProfile),
+          solarF,
+          windF,
+          loadF,
           wasmCosts,
           batteryMode,
           optimizerConfig,
@@ -489,40 +505,52 @@ export const useSweepStore = create<SweepState>()(
           lcoe: r.lcoe,
         }));
 
-        // ELCC sweep mode: for each portfolio, also compute first_in + marginal
-        // ELCC for the swept resource. Mirrors Python's resource sweep with
-        // metric_type='elcc' which plots both Avg (First-In) and Marginal as
-        // the resource ramps. Costs ~10× more sims per point (ELCC runs many
-        // sub-simulations) — only run when explicitly requested.
+        // ELCC sweep mode: derive average and marginal ELCC from the same
+        // zero-swept-resource baseline used by the resource sweep. This mirrors
+        // Python's resource_sweep path: Avg is cumulative peak-gas reduction per
+        // MW/MWh added, while Marginal is the interval slope between sweep points.
         if (resourceSweepMetric === 'elcc') {
-          const solarF = new Float64Array(solarProfile);
-          const windF = new Float64Array(windProfile);
-          const loadF = new Float64Array(loadProfile);
+          const getPeakGas = (p: {
+            solar: number;
+            wind: number;
+            storage: number;
+            clean_firm: number;
+          }): number => {
+            const simResult = wasm.simulate(
+              serializeSimulationConfig({
+                ...config,
+                solar_capacity: p.solar,
+                wind_capacity: p.wind,
+                storage_capacity: p.storage,
+                clean_firm_capacity: p.clean_firm,
+              }),
+              solarF,
+              windF,
+              loadF,
+            ) as { peak_gas?: number; gas_generation?: number[] };
+
+            if (Number.isFinite(simResult.peak_gas)) {
+              return simResult.peak_gas as number;
+            }
+            if (Array.isArray(simResult.gas_generation) && simResult.gas_generation.length > 0) {
+              return Math.max(...simResult.gas_generation);
+            }
+            throw new Error('Simulation did not return peak gas');
+          };
+
+          const elccValues = calculateResourceSweepElcc(
+            portfolios.map((portfolio, index) => ({
+              capacity: points[index].capacity,
+              peakGas: getPeakGas(portfolio),
+            })),
+          );
+
           for (let i = 0; i < portfolios.length; i++) {
-            const p = portfolios[i];
             try {
-              const elcc = wasm.calculate_elcc_metrics(
-                p.solar,
-                p.wind,
-                p.storage,
-                p.clean_firm,
-                solarF,
-                windF,
-                loadF,
-                serializeBatteryMode(config.battery_mode),
-                config.battery_efficiency,
-                config.max_demand_response,
-              ) as {
-                solar: { first_in: number; marginal: number };
-                wind: { first_in: number; marginal: number };
-                storage: { first_in: number; marginal: number };
-                clean_firm: { first_in: number; marginal: number };
-              };
-              const r = elcc[resourceSweepResource];
-              points[i].first_in_elcc = r.first_in;
-              points[i].marginal_elcc = r.marginal;
+              points[i].avg_elcc = elccValues[i].avg_elcc;
+              points[i].marginal_elcc = elccValues[i].marginal_elcc;
             } catch (e) {
-              // Leave first_in_elcc / marginal_elcc undefined on failure
+              // Leave avg_elcc / marginal_elcc undefined on failure.
               console.warn(`ELCC failed at point ${i}:`, e);
             }
           }
@@ -546,7 +574,7 @@ export const useSweepStore = create<SweepState>()(
           state.isRunning = false;
         });
 
-        console.log(`Resource sweep (${resourceSweepResource}, ${steps} pts) completed in ${elapsed_ms.toFixed(0)}ms`);
+        debugLog(`Resource sweep (${resourceSweepResource}, ${steps} pts) completed in ${elapsed_ms.toFixed(0)}ms`);
       } catch (error) {
         console.error('Resource sweep error:', error);
         set((state) => {

@@ -11,18 +11,31 @@ export const ControlPanel: React.FC = () => {
   const loadType = useSimulationStore((state) => state.loadType);
   const setLoadType = useSimulationStore((state) => state.setLoadType);
   const setBatteryMode = useSimulationStore((state) => state.setBatteryMode);
+  const isLimitedForecast = config.battery_mode === BatteryMode.LimitedForecast;
 
   const batteryModeOptions = [
     { value: BatteryMode.Default, label: 'Default (Water-fill)' },
     { value: BatteryMode.PeakShaver, label: 'Peak Shaver' },
     { value: BatteryMode.Hybrid, label: 'Hybrid' },
-    { value: BatteryMode.LimitedForecast, label: 'Limited Forecast (48h)' },
+    { value: BatteryMode.LimitedForecast, label: 'Limited Forecast Lab' },
   ];
 
   const loadTypeOptions = [
     { value: 'hourly', label: 'Hourly Load (zone profile)' },
     { value: 'flat', label: 'Flat Load (100 MW constant)' },
   ];
+
+  const limitedForecastHorizonOptions = [
+    { value: 24, label: '24 hours' },
+    { value: 48, label: '48 hours' },
+    { value: 72, label: '72 hours' },
+    { value: 168, label: '168 hours' },
+  ];
+  const limitedForecastCommitOptions = [
+    { value: 1, label: 'Hourly' },
+    { value: 6, label: 'Every 6 hours' },
+    { value: 24, label: 'Daily' },
+  ].filter((option) => option.value <= config.limited_forecast_horizon_hours);
 
   const zoneOptions = ZONE_NAMES.map((z) => ({ value: z, label: z }));
 
@@ -115,6 +128,82 @@ export const ControlPanel: React.FC = () => {
           options={batteryModeOptions}
           onChange={(v) => setBatteryMode(Number(v) as BatteryMode)}
         />
+
+        {isLimitedForecast && (
+          <div className="pt-3 border-t border-gray-100 space-y-4">
+            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              Limited Forecast
+            </h4>
+
+            <Select
+              label="Forecast Horizon"
+              value={config.limited_forecast_horizon_hours}
+              options={limitedForecastHorizonOptions}
+              onChange={(v) => {
+                const horizon = Number(v);
+                setConfig({
+                  limited_forecast_horizon_hours: horizon,
+                  limited_forecast_commit_hours: Math.min(
+                    config.limited_forecast_commit_hours,
+                    horizon
+                  ),
+                });
+              }}
+            />
+
+            <Select
+              label="Re-optimization Cadence"
+              value={config.limited_forecast_commit_hours}
+              options={limitedForecastCommitOptions}
+              onChange={(v) => setConfig({ limited_forecast_commit_hours: Number(v) })}
+            />
+
+            <Slider
+              label="Renewables Forecast Error"
+              value={config.limited_forecast_renewable_error_pct}
+              min={0}
+              max={100}
+              step={10}
+              unit="%"
+              color={COLORS.wind}
+              onChange={(v) => setConfig({ limited_forecast_renewable_error_pct: v })}
+            />
+
+            <Slider
+              label="SOC Holdback"
+              value={config.limited_forecast_soc_reserve_pct}
+              min={0}
+              max={50}
+              step={5}
+              unit="%"
+              color={COLORS.storage}
+              onChange={(v) => setConfig({ limited_forecast_soc_reserve_pct: v })}
+            />
+
+            <Slider
+              label="Peak Value Weight"
+              value={config.limited_forecast_peak_value_mwh_per_mw}
+              min={0}
+              max={96}
+              step={6}
+              unit="MWh/MW"
+              color={COLORS.gas}
+              onChange={(v) => setConfig({ limited_forecast_peak_value_mwh_per_mw: v })}
+            />
+
+            <label className="flex items-center justify-between gap-3 text-sm font-medium text-gray-700">
+              <span>Economic Gas/Grid Charging</span>
+              <input
+                type="checkbox"
+                checked={config.limited_forecast_allow_gas_charging}
+                onChange={(e) =>
+                  setConfig({ limited_forecast_allow_gas_charging: e.target.checked })
+                }
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Demand Response */}
