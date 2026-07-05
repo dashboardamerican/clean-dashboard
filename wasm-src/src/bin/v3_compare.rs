@@ -24,7 +24,8 @@ fn append_jsonl(path: &PathBuf, value: serde_json::Value) -> Result<(), String> 
 
     let line = serde_json::to_string(&value)
         .map_err(|e| format!("Failed to serialize jsonl payload: {}", e))?;
-    writeln!(file, "{}", line).map_err(|e| format!("Failed to write jsonl line {}: {}", path.display(), e))
+    writeln!(file, "{}", line)
+        .map_err(|e| format!("Failed to write jsonl line {}: {}", path.display(), e))
 }
 
 #[cfg(feature = "experimental-v3")]

@@ -34,6 +34,7 @@ fn main() {
             battery_efficiency: 0.85,
             max_demand_response: 0.0,
             battery_mode: BatteryMode::PeakShaver,
+            ..SimulationConfig::with_defaults()
         };
 
         let result = simulate_system(

@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Slider, Select } from '../atoms';
 import { useSimulationStore, LoadType } from '../../stores/simulationStore';
+import { useCostOptimizerStore } from '../../stores/costOptimizerStore';
 import { BatteryMode, COLORS, ZONE_NAMES } from '../../types';
+import { CostOptimizedControls } from '../../features/optimizer/CostOptimizedControls';
 
 export const ControlPanel: React.FC = () => {
   const config = useSimulationStore((state) => state.config);
@@ -12,6 +14,9 @@ export const ControlPanel: React.FC = () => {
   const setLoadType = useSimulationStore((state) => state.setLoadType);
   const setBatteryMode = useSimulationStore((state) => state.setBatteryMode);
   const isLimitedForecast = config.battery_mode === BatteryMode.LimitedForecast;
+  const controlMode = useCostOptimizerStore((state) => state.mode);
+  const setControlMode = useCostOptimizerStore((state) => state.setMode);
+  const scheduleAutoOptimize = useCostOptimizerStore((state) => state.scheduleAutoOptimize);
 
   const batteryModeOptions = [
     { value: BatteryMode.Default, label: 'Default (Water-fill)' },
@@ -39,6 +44,26 @@ export const ControlPanel: React.FC = () => {
 
   const zoneOptions = ZONE_NAMES.map((z) => ({ value: z, label: z }));
 
+  useEffect(() => {
+    if (controlMode === 'costOptimized') {
+      scheduleAutoOptimize();
+    }
+  }, [
+    controlMode,
+    zone,
+    loadType,
+    config.battery_mode,
+    config.battery_efficiency,
+    config.max_demand_response,
+    config.limited_forecast_horizon_hours,
+    config.limited_forecast_commit_hours,
+    config.limited_forecast_renewable_error_pct,
+    config.limited_forecast_soc_reserve_pct,
+    config.limited_forecast_peak_value_mwh_per_mw,
+    config.limited_forecast_allow_gas_charging,
+    scheduleAutoOptimize,
+  ]);
+
   return (
     <div className="bg-white rounded-lg shadow p-4 space-y-6">
       <h2 className="text-lg font-semibold text-gray-900 border-b pb-2">
@@ -65,45 +90,76 @@ export const ControlPanel: React.FC = () => {
         />
       </div>
 
-      {/* Capacity sliders */}
-      <div data-tutorial-id="capacity-sliders" className="space-y-4">
-        <h3 className="text-sm font-medium text-gray-700 uppercase tracking-wide">
-          Generation Capacity
-        </h3>
-
-        <Slider
-          label="Solar Capacity"
-          value={config.solar_capacity}
-          min={0}
-          max={1000}
-          step={10}
-          unit="MW"
-          color={COLORS.solar}
-          onChange={(v) => setConfig({ solar_capacity: v })}
-        />
-
-        <Slider
-          label="Wind Capacity"
-          value={config.wind_capacity}
-          min={0}
-          max={700}
-          step={10}
-          unit="MW"
-          color={COLORS.wind}
-          onChange={(v) => setConfig({ wind_capacity: v })}
-        />
-
-        <Slider
-          label="Clean Firm Capacity"
-          value={config.clean_firm_capacity}
-          min={0}
-          max={200}
-          step={5}
-          unit="MW"
-          color={COLORS.cleanFirm}
-          onChange={(v) => setConfig({ clean_firm_capacity: v })}
-        />
+      {/* Control mode */}
+      <div>
+        <div className="grid grid-cols-2 gap-1 rounded-md bg-gray-100 p-1">
+          <button
+            type="button"
+            onClick={() => setControlMode('manualCapacity')}
+            className={`rounded px-3 py-2 text-sm font-medium transition ${
+              controlMode === 'manualCapacity'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Manual Build
+          </button>
+          <button
+            type="button"
+            onClick={() => setControlMode('costOptimized')}
+            className={`rounded px-3 py-2 text-sm font-medium transition ${
+              controlMode === 'costOptimized'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Optimize From Costs
+          </button>
+        </div>
       </div>
+
+      {controlMode === 'manualCapacity' ? (
+        <div data-tutorial-id="capacity-sliders" className="space-y-4">
+          <h3 className="text-sm font-medium text-gray-700 uppercase tracking-wide">
+            Generation Capacity
+          </h3>
+
+          <Slider
+            label="Solar Capacity"
+            value={config.solar_capacity}
+            min={0}
+            max={1000}
+            step={10}
+            unit="MW"
+            color={COLORS.solar}
+            onChange={(v) => setConfig({ solar_capacity: v })}
+          />
+
+          <Slider
+            label="Wind Capacity"
+            value={config.wind_capacity}
+            min={0}
+            max={700}
+            step={10}
+            unit="MW"
+            color={COLORS.wind}
+            onChange={(v) => setConfig({ wind_capacity: v })}
+          />
+
+          <Slider
+            label="Clean Firm Capacity"
+            value={config.clean_firm_capacity}
+            min={0}
+            max={200}
+            step={5}
+            unit="MW"
+            color={COLORS.cleanFirm}
+            onChange={(v) => setConfig({ clean_firm_capacity: v })}
+          />
+        </div>
+      ) : (
+        <CostOptimizedControls />
+      )}
 
       {/* Storage */}
       <div data-tutorial-id="storage-and-battery" className="space-y-4">
@@ -111,16 +167,18 @@ export const ControlPanel: React.FC = () => {
           Energy Storage
         </h3>
 
-        <Slider
-          label="Storage Capacity"
-          value={config.storage_capacity}
-          min={0}
-          max={2400}
-          step={50}
-          unit="MWh"
-          color={COLORS.storage}
-          onChange={(v) => setConfig({ storage_capacity: v })}
-        />
+        {controlMode === 'manualCapacity' && (
+          <Slider
+            label="Storage Capacity"
+            value={config.storage_capacity}
+            min={0}
+            max={2400}
+            step={50}
+            unit="MWh"
+            color={COLORS.storage}
+            onChange={(v) => setConfig({ storage_capacity: v })}
+          />
+        )}
 
         <Select
           label="Battery Mode"

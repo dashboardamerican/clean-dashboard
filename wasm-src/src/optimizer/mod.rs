@@ -49,7 +49,7 @@ pub use v2_hierarchical::{
 };
 #[cfg(feature = "experimental-v3")]
 pub use v3::{
-    apply_quick_fail_state, run_suite, run_v3_global_grid, run_v3_oracle, run_v3_optimizer,
+    apply_quick_fail_state, run_suite, run_v3_global_grid, run_v3_optimizer, run_v3_oracle,
     write_suite_report, CaseReport, SuiteReport, V3Diagnostics, V3Result, V3SearchConfig,
 };
 

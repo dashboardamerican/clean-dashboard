@@ -226,6 +226,11 @@ impl Default for DepreciationMethod {
     }
 }
 
+/// Serde default helper for boolean flags that default to true.
+fn default_true() -> bool {
+    true
+}
+
 /// Cost parameters for LCOE calculation
 #[wasm_bindgen]
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -264,6 +269,16 @@ pub struct CostParams {
     pub excess_power_price: f64,            // $/MWh (for selling curtailed power)
     pub monetize_excess_depreciation: bool, // Enable depreciation monetization
     pub monetization_rate: f64,             // % of excess depreciation to monetize
+    /// Carry unused tax deductions forward to later years (NOL carryforward)
+    /// instead of letting them vanish when depreciation exceeds taxable income.
+    /// Default ON (real tax-code behavior); set false for legacy/Python parity.
+    #[serde(default = "default_true")]
+    pub tax_loss_carryforward: bool,
+    /// Iterate the LCOE so the revenue assumed for tax purposes equals the
+    /// resulting LCOE (true break-even LCOE) instead of fixed electricity_price.
+    /// Default ON (honest break-even number); set false for legacy behavior.
+    #[serde(default = "default_true")]
+    pub self_consistent_lcoe: bool,
 
     // Planning reserve margin: built firm capacity in the tightest hour exceeds
     // the operational peak by this fraction. Scales gas/CF capex, fixed O&M,
@@ -356,6 +371,8 @@ impl CostParams {
             excess_power_price: 0.0,
             monetize_excess_depreciation: false,
             monetization_rate: 50.0,
+            tax_loss_carryforward: true,
+            self_consistent_lcoe: true,
 
             // Planning reserve margin (15% — NERC reference for thermal-dominated)
             reserve_margin: 15.0,

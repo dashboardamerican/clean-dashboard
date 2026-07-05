@@ -57,6 +57,7 @@ fn main() {
             battery_efficiency: 0.85,
             max_demand_response: 0.0,
             battery_mode: BatteryMode::PeakShaver,
+            ..SimulationConfig::with_defaults()
         };
 
         let ps_result = simulate_system(&ps_config, solar_profile, wind_profile, load_profile)
@@ -173,6 +174,7 @@ fn main() {
         battery_efficiency: 0.85,
         max_demand_response: 0.0,
         battery_mode: BatteryMode::PeakShaver,
+        ..SimulationConfig::with_defaults()
     };
 
     // Warmup

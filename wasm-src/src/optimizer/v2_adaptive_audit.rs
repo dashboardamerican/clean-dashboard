@@ -753,6 +753,7 @@ fn run_oracle_scan(
                         battery_efficiency: 0.85,
                         max_demand_response: 0.0,
                         battery_mode,
+                        ..SimulationConfig::with_defaults()
                     };
                     let sim = simulate_system(
                         &sim_config,

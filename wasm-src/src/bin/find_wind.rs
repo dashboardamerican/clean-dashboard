@@ -40,6 +40,7 @@ fn main() {
             battery_efficiency: 0.85,
             max_demand_response: 0.0,
             battery_mode: BatteryMode::Hybrid,
+            ..SimulationConfig::with_defaults()
         };
 
         let sim = simulate_system(&config, &solar, &wind, &load).unwrap();
@@ -69,6 +70,7 @@ fn main() {
         battery_efficiency: 0.85,
         max_demand_response: 0.0,
         battery_mode: BatteryMode::Hybrid,
+        ..SimulationConfig::with_defaults()
     };
     let sim = simulate_system(&config, &solar, &wind, &load).unwrap();
     let lcoe = calculate_lcoe(&sim, 0.0, 325.0, 0.0, 7.4, &costs);

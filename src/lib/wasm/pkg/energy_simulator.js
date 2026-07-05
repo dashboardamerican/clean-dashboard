@@ -283,6 +283,16 @@ export class CostParams {
         return ret;
     }
     /**
+     * Iterate the LCOE so the revenue assumed for tax purposes equals the
+     * resulting LCOE (true break-even LCOE) instead of fixed electricity_price.
+     * Default ON (honest break-even number); set false for legacy behavior.
+     * @returns {boolean}
+     */
+    get self_consistent_lcoe() {
+        const ret = wasm.__wbg_get_costparams_self_consistent_lcoe(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
      * @returns {number}
      */
     get solar_capex() {
@@ -365,6 +375,16 @@ export class CostParams {
     get storage_var_om() {
         const ret = wasm.__wbg_get_costparams_storage_var_om(this.__wbg_ptr);
         return ret;
+    }
+    /**
+     * Carry unused tax deductions forward to later years (NOL carryforward)
+     * instead of letting them vanish when depreciation exceeds taxable income.
+     * Default ON (real tax-code behavior); set false for legacy/Python parity.
+     * @returns {boolean}
+     */
+    get tax_loss_carryforward() {
+        const ret = wasm.__wbg_get_costparams_tax_loss_carryforward(this.__wbg_ptr);
+        return ret !== 0;
     }
     /**
      * @returns {number}
@@ -640,6 +660,15 @@ export class CostParams {
         wasm.__wbg_set_costparams_reserve_margin(this.__wbg_ptr, arg0);
     }
     /**
+     * Iterate the LCOE so the revenue assumed for tax purposes equals the
+     * resulting LCOE (true break-even LCOE) instead of fixed electricity_price.
+     * Default ON (honest break-even number); set false for legacy behavior.
+     * @param {boolean} arg0
+     */
+    set self_consistent_lcoe(arg0) {
+        wasm.__wbg_set_costparams_self_consistent_lcoe(this.__wbg_ptr, arg0);
+    }
+    /**
      * @param {number} arg0
      */
     set solar_capex(arg0) {
@@ -710,6 +739,15 @@ export class CostParams {
      */
     set storage_var_om(arg0) {
         wasm.__wbg_set_costparams_storage_var_om(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Carry unused tax deductions forward to later years (NOL carryforward)
+     * instead of letting them vanish when depreciation exceeds taxable income.
+     * Default ON (real tax-code behavior); set false for legacy/Python parity.
+     * @param {boolean} arg0
+     */
+    set tax_loss_carryforward(arg0) {
+        wasm.__wbg_set_costparams_tax_loss_carryforward(this.__wbg_ptr, arg0);
     }
     /**
      * @param {number} arg0

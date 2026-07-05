@@ -97,6 +97,7 @@ fn evaluate(
         battery_efficiency,
         max_demand_response,
         battery_mode,
+        ..SimulationConfig::with_defaults()
     };
 
     let sim = simulate_system(&sim_config, solar_profile, wind_profile, load_profile)?;

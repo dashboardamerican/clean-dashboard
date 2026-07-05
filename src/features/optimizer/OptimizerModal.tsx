@@ -3,7 +3,7 @@ import { Modal, Button, Slider } from '../../components/atoms';
 import { useSimulationStore } from '../../stores/simulationStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { OptimizerConfig, OptimizerResult, DEFAULT_OPTIMIZER_CONFIG } from '../../types';
-import { serializeCostParams, withOptimizerRuntimeConfig } from '../../lib/wasmSerde';
+import { runPortfolioOptimization } from './runPortfolioOptimization';
 
 interface OptimizerModalProps {
   isOpen: boolean;
@@ -20,6 +20,7 @@ export const OptimizerModal: React.FC<OptimizerModalProps> = ({ isOpen, onClose 
   const solarProfile = useSimulationStore((state) => state.solarProfile);
   const windProfile = useSimulationStore((state) => state.windProfile);
   const loadProfile = useSimulationStore((state) => state.loadProfile);
+  const zone = useSimulationStore((state) => state.zone);
   const batteryMode = useSimulationStore((state) => state.config.battery_mode);
   const simulationConfig = useSimulationStore((state) => state.config);
   const applyOptimizerResult = useSimulationStore((state) => state.applyOptimizerResult);
@@ -37,33 +38,22 @@ export const OptimizerModal: React.FC<OptimizerModalProps> = ({ isOpen, onClose 
     setResult(null);
     setElapsedMs(null);
 
-    const startTime = performance.now();
-
     try {
-      const wasmCosts = serializeCostParams(costs);
-      const wasmOptimizerConfig = withOptimizerRuntimeConfig(config, simulationConfig);
+      const optimization = await runPortfolioOptimization({
+        wasm,
+        zone,
+        optimizerConfig: config,
+        simulationConfig,
+        solarProfile,
+        windProfile,
+        loadProfile,
+        costs,
+        batteryMode,
+      });
 
-      // Convert profiles to Float64Array
-      const solarFloat = new Float64Array(solarProfile);
-      const windFloat = new Float64Array(windProfile);
-      const loadFloat = new Float64Array(loadProfile);
-
-      const optimizerResult: OptimizerResult = wasm.optimize(
-        wasmOptimizerConfig.target_clean_match,
-        solarFloat,
-        windFloat,
-        loadFloat,
-        wasmCosts,
-        wasmOptimizerConfig,
-        batteryMode
-      );
-
-      const endTime = performance.now();
-      setElapsedMs(endTime - startTime);
-      setResult(optimizerResult);
+      setElapsedMs(optimization.elapsedMs);
+      setResult(optimization.result);
     } catch (err) {
-      const endTime = performance.now();
-      setElapsedMs(endTime - startTime);
       setError(err instanceof Error ? err.message : 'Optimization failed');
     } finally {
       setIsRunning(false);

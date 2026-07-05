@@ -94,6 +94,7 @@ fn main() {
         battery_efficiency: baseline.config.battery_eff,
         max_demand_response: baseline.config.max_demand_response,
         battery_mode: BatteryMode::PeakShaver,
+        ..SimulationConfig::with_defaults()
     };
 
     let result = simulate_system(

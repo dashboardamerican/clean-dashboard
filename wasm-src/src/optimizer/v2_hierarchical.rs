@@ -320,6 +320,7 @@ fn binary_search_cf(
     )?;
 
     if base.clean_match >= target - tolerance {
+        cache.set_last_eval_count(1);
         return Ok((0.0, base));
     }
 
@@ -375,6 +376,167 @@ fn binary_search_cf(
     Ok((best_cf, best_result))
 }
 
+#[allow(clippy::too_many_arguments)]
+fn polish_vre_overshoot_by_scaling(
+    solar: f64,
+    wind: f64,
+    storage: f64,
+    target: f64,
+    tolerance: f64,
+    max_cf: f64,
+    solar_profile: &[f64],
+    wind_profile: &[f64],
+    load_profile: &[f64],
+    costs: &CostParams,
+    config: &OptimizerConfig,
+    cache: &mut EvalCache,
+    battery_mode: BatteryMode,
+    max_iters: usize,
+) -> Result<(Option<(f64, f64, f64, f64, EvalResult)>, u32), String> {
+    let renewable_capacity = if config.enable_solar { solar } else { 0.0 }
+        + if config.enable_wind { wind } else { 0.0 }
+        + if config.enable_storage { storage } else { 0.0 };
+    if renewable_capacity <= 1e-9 {
+        return Ok((None, 0));
+    }
+
+    let base = evaluate_cached(
+        solar,
+        wind,
+        storage,
+        0.0,
+        solar_profile,
+        wind_profile,
+        load_profile,
+        costs,
+        config,
+        cache,
+        battery_mode,
+    )?;
+    let mut eval_count = 1u32;
+    if base.clean_match <= target + tolerance {
+        return Ok((None, eval_count));
+    }
+
+    let zero = evaluate_cached(
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        solar_profile,
+        wind_profile,
+        load_profile,
+        costs,
+        config,
+        cache,
+        battery_mode,
+    )?;
+    eval_count += 1;
+    if zero.clean_match > target {
+        return Ok((None, eval_count));
+    }
+
+    let mut low = 0.0;
+    let mut high = 1.0;
+    let mut best_scale = 1.0;
+    let mut best_result = base;
+
+    for _ in 0..max_iters {
+        let scale = (low + high) / 2.0;
+        let scaled_solar = if config.enable_solar {
+            solar * scale
+        } else {
+            0.0
+        };
+        let scaled_wind = if config.enable_wind {
+            wind * scale
+        } else {
+            0.0
+        };
+        let scaled_storage = if config.enable_storage {
+            storage * scale
+        } else {
+            0.0
+        };
+        let result = evaluate_cached(
+            scaled_solar,
+            scaled_wind,
+            scaled_storage,
+            0.0,
+            solar_profile,
+            wind_profile,
+            load_profile,
+            costs,
+            config,
+            cache,
+            battery_mode,
+        )?;
+        eval_count += 1;
+
+        if (result.clean_match - target).abs() < (best_result.clean_match - target).abs() {
+            best_scale = scale;
+            best_result = result.clone();
+        }
+
+        if result.clean_match < target {
+            low = scale;
+        } else {
+            high = scale;
+        }
+
+        if (result.clean_match - target).abs() < tolerance / 2.0 {
+            break;
+        }
+    }
+
+    let scaled_solar = if config.enable_solar {
+        solar * best_scale
+    } else {
+        0.0
+    };
+    let scaled_wind = if config.enable_wind {
+        wind * best_scale
+    } else {
+        0.0
+    };
+    let scaled_storage = if config.enable_storage {
+        storage * best_scale
+    } else {
+        0.0
+    };
+
+    let (cf, result) =
+        if config.enable_clean_firm && max_cf > 0.0 && best_result.clean_match < target - tolerance
+        {
+            let (cf, result) = binary_search_cf(
+                scaled_solar,
+                scaled_wind,
+                scaled_storage,
+                target,
+                tolerance,
+                max_cf,
+                solar_profile,
+                wind_profile,
+                load_profile,
+                costs,
+                config,
+                cache,
+                battery_mode,
+                12,
+            )?;
+            eval_count += cache.last_eval_count();
+            (cf, result)
+        } else {
+            (0.0, best_result)
+        };
+
+    cache.set_last_eval_count(eval_count);
+    Ok((
+        Some((scaled_solar, scaled_wind, scaled_storage, cf, result)),
+        eval_count,
+    ))
+}
+
 /// Run the V2 hierarchical optimizer
 ///
 /// Uses a two-phase approach:
@@ -403,6 +565,9 @@ pub fn run_v2_optimizer(
     battery_mode: BatteryMode,
     model: Option<&EmpiricalModel>,
 ) -> Result<OptimizerResult, String> {
+    // Production default is Accurate: one quality bar everywhere (2026-07-05).
+    // The certified numbers (97%+ within 1% of ground truth) describe Accurate
+    // mode; Fast is an internal building block, not a user-facing tier.
     run_v2_optimizer_mode(
         target,
         solar_profile,
@@ -412,7 +577,7 @@ pub fn run_v2_optimizer(
         config,
         battery_mode,
         model,
-        V2Mode::Fast,
+        V2Mode::Accurate,
         None,
     )
 }
@@ -471,9 +636,342 @@ pub fn run_v2_optimizer_mode_detailed(
         mode,
         accurate_config,
         &mut cache,
+        None,
     )
 }
 
+/// Fast-mode mini-polish tunables (targets in [90, 99) and warm-started sweep
+/// targets). Bounded: single stage of coarse steps (build_stage_schedule appends
+/// the micro stages, but the eval cap is the real limiter), small eval budget,
+/// short time backstop. Fast mode is +1.5-3.2% vs corpus at t=90-98 without any
+/// polish (optimizer_research F20); this buys back most of that for ~80 sims.
+fn fast_mini_polish_config() -> V2AccurateConfig {
+    V2AccurateConfig {
+        max_extra_evals: 80,
+        max_extra_ms: 300.0,
+        lcoe_improve_min: 0.01,
+        step_schedule: V2StepSchedule {
+            solar_wind_steps: vec![40.0],
+            storage_steps: vec![80.0],
+            clean_firm_steps: vec![10.0],
+        },
+        target_tolerance: 0.5,
+        multi_start_top_k: 1,
+        // Disable the hard-target budget expansion paths: the caps above ARE
+        // the budget in mini-polish mode.
+        hard_target_threshold: f64::INFINITY,
+        adaptive_hard_max_extra_evals: 80,
+    }
+}
+
+/// Polish tunables for warm-started fast-mode sweep targets below t=99. The
+/// warm seed replaces the whole greedy pass, so this polish is the only local
+/// search on the path — it gets a second (medium) stage and a slightly larger
+/// budget than the single-target mini-polish, while staying far cheaper than
+/// the greedy pass it replaces (~160 vs ~700-1200 sims). Targets in the
+/// storage-restructuring / CF-entry band (t >= 85) get a bigger budget and
+/// multi-start seeds: that is where the optimal mix pivots fastest between
+/// adjacent sweep targets (F15/F17) and a single-seed coarse polish stalls.
+fn fast_warm_polish_config(target: f64) -> V2AccurateConfig {
+    if target >= 55.0 {
+        // Split budget: t=55-70 is the mix-entry region (solar/storage joining
+        // a wind-heavy path) where 300 evals suffice; t>=75 approaches the
+        // CF-entry fold where the pivot is larger (e.g. southeast t=85) and
+        // needs the fuller 400-eval budget.
+        let evals = if target >= 75.0 { 400 } else { 300 };
+        V2AccurateConfig {
+            max_extra_evals: evals,
+            max_extra_ms: 600.0,
+            lcoe_improve_min: 0.01,
+            step_schedule: V2StepSchedule::default(),
+            target_tolerance: 0.5,
+            multi_start_top_k: 3,
+            hard_target_threshold: f64::INFINITY,
+            adaptive_hard_max_extra_evals: evals,
+        }
+    } else {
+        V2AccurateConfig {
+            max_extra_evals: 160,
+            max_extra_ms: 400.0,
+            lcoe_improve_min: 0.01,
+            step_schedule: V2StepSchedule {
+                solar_wind_steps: vec![40.0, 20.0],
+                storage_steps: vec![80.0, 40.0],
+                clean_firm_steps: vec![10.0, 5.0],
+            },
+            target_tolerance: 0.5,
+            multi_start_top_k: 1,
+            hard_target_threshold: f64::INFINITY,
+            adaptive_hard_max_extra_evals: 160,
+        }
+    }
+}
+
+/// Re-size a previous sweep target's portfolio for a new target by adjusting CF
+/// (and, on overshoot, scaling VRE down) using the existing precision machinery.
+/// Returns None when the warm start cannot be made feasible for the new target
+/// (caller falls back to the full pipeline). Warm-start continuation across
+/// sweep targets is safe: the optimal path never folds (optimizer_research F12).
+#[allow(clippy::too_many_arguments)]
+fn resize_warm_start_for_target(
+    warm: &OptimizerResult,
+    target: f64,
+    solar_profile: &[f64],
+    wind_profile: &[f64],
+    load_profile: &[f64],
+    costs: &CostParams,
+    config: &OptimizerConfig,
+    battery_mode: BatteryMode,
+    cache: &mut EvalCache,
+) -> Result<Option<OptimizerResult>, String> {
+    let precision = V2Config::default().precision;
+    let feasibility_tolerance = V2AccurateConfig::default().target_tolerance;
+
+    // An essentially empty warm portfolio (e.g. the t=0 sweep point) would make
+    // CF the sole closer and seed the polish with an all-CF cover — exactly the
+    // F20 degenerate mode. Let the full pipeline handle that target instead.
+    // (A 25 MW gate was tried and rejected: pushing the continuation entry
+    // point later reshuffles the whole path along the flat solar<->wind ridge
+    // and produced worse mid-target results in texas/florida.)
+    let warm_total = warm.solar_capacity
+        + warm.wind_capacity
+        + warm.storage_capacity
+        + warm.clean_firm_capacity;
+    if warm_total < 1.0 {
+        return Ok(None);
+    }
+
+    // Clamp to the current config's bounds/enabled flags before re-sizing.
+    let (solar, wind, storage, _) = clamp_candidate(
+        warm.solar_capacity,
+        warm.wind_capacity,
+        warm.storage_capacity,
+        warm.clean_firm_capacity,
+        config,
+    );
+    let max_cf = if config.enable_clean_firm {
+        config.max_clean_firm
+    } else {
+        0.0
+    };
+
+    let mut warm_evals = 0u32;
+
+    // Evaluate the warm portfolio as-is (with its CF) at the new target.
+    let warm_cf = if config.enable_clean_firm {
+        warm.clean_firm_capacity.clamp(0.0, max_cf)
+    } else {
+        0.0
+    };
+    let base = evaluate_cached(
+        solar,
+        wind,
+        storage,
+        warm_cf,
+        solar_profile,
+        wind_profile,
+        load_profile,
+        costs,
+        config,
+        cache,
+        battery_mode,
+    )?;
+    warm_evals += 1;
+    let mut best = (solar, wind, storage, warm_cf, base.clone());
+
+    // Undershoot (ascending sweep): scale VRE up with CF held fixed. This
+    // preserves the near-optimal portfolio SHAPE from the previous target;
+    // closing the whole gap with CF instead would hand the polish a CF-heavy
+    // seed it must laboriously exchange away (the F20 degenerate-cover trap).
+    if base.clean_match < target - precision {
+        let vre_total = solar + wind + storage;
+        if vre_total > 1e-9 {
+            let mut max_scale: f64 = 4.0;
+            if solar > 1e-9 {
+                max_scale = max_scale.min(config.max_solar / solar);
+            }
+            if wind > 1e-9 {
+                max_scale = max_scale.min(config.max_wind / wind);
+            }
+            if storage > 1e-9 {
+                max_scale = max_scale.min(config.max_storage / storage);
+            }
+            if max_scale > 1.0 {
+                let mut low = 1.0f64;
+                let mut high = max_scale;
+                for _ in 0..12 {
+                    let scale = (low + high) / 2.0;
+                    let (cs, cw, cst, ccf) = clamp_candidate(
+                        solar * scale,
+                        wind * scale,
+                        storage * scale,
+                        warm_cf,
+                        config,
+                    );
+                    let eval = evaluate_cached(
+                        cs,
+                        cw,
+                        cst,
+                        ccf,
+                        solar_profile,
+                        wind_profile,
+                        load_profile,
+                        costs,
+                        config,
+                        cache,
+                        battery_mode,
+                    )?;
+                    warm_evals += 1;
+                    if (eval.clean_match - target).abs() < (best.4.clean_match - target).abs() {
+                        best = (cs, cw, cst, ccf, eval.clone());
+                    }
+                    if eval.clean_match < target {
+                        low = scale;
+                    } else {
+                        high = scale;
+                    }
+                    if (eval.clean_match - target).abs() < precision / 2.0 {
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Still short (VRE saturation or scale capped): let CF close the
+        // residual gap precisely, as usual.
+        if best.4.clean_match < target - precision && config.enable_clean_firm && max_cf > 0.0 {
+            let (cf, result) = binary_search_cf(
+                best.0,
+                best.1,
+                best.2,
+                target,
+                precision / 2.0,
+                max_cf,
+                solar_profile,
+                wind_profile,
+                load_profile,
+                costs,
+                config,
+                cache,
+                battery_mode,
+                15,
+            )?;
+            warm_evals += cache.last_eval_count();
+            if (result.clean_match - target).abs() < (best.4.clean_match - target).abs() {
+                best = (best.0, best.1, best.2, cf, result);
+            }
+        }
+        // Candidates B/C: alternative VRE levels with CF closing the gap.
+        // Near the CF-entry fold the optimal mix pivots toward CF (F15/F17):
+        // the best portfolio may keep the previous VRE (B: ratio 1.0) or SHED
+        // a chunk of it (C: ratios < 1.0 — e.g. northwest t=95's optimum is
+        // roughly half of t=90's VRE plus CF). Pick the cheapest feasible seed.
+        if config.enable_clean_firm && max_cf > 0.0 {
+            let mut vre_ratios = vec![1.0];
+            if target >= 75.0 {
+                vre_ratios.push(0.75);
+                vre_ratios.push(0.5);
+            }
+            for ratio in vre_ratios {
+                let (cs, cw, cst, _) =
+                    clamp_candidate(solar * ratio, wind * ratio, storage * ratio, 0.0, config);
+                let (cf_b, result_b) = binary_search_cf(
+                    cs,
+                    cw,
+                    cst,
+                    target,
+                    precision / 2.0,
+                    max_cf,
+                    solar_profile,
+                    wind_profile,
+                    load_profile,
+                    costs,
+                    config,
+                    cache,
+                    battery_mode,
+                    15,
+                )?;
+                warm_evals += cache.last_eval_count();
+                let b_feasible = (result_b.clean_match - target).abs() <= feasibility_tolerance;
+                let best_feasible = (best.4.clean_match - target).abs() <= feasibility_tolerance;
+                if b_feasible && (!best_feasible || result_b.lcoe + 1e-9 < best.4.lcoe) {
+                    best = (cs, cw, cst, cf_b, result_b);
+                }
+            }
+        }
+    }
+
+    if best.4.clean_match > target + precision {
+        // Overshoot (descending sweeps / large target drops). First see if
+        // shrinking CF alone recovers the target (binary_search_cf handles
+        // this: it starts from the CF=0 base and re-sizes upward as needed).
+        if best.3 > 0.0 {
+            let (cf, result) = binary_search_cf(
+                best.0,
+                best.1,
+                best.2,
+                target,
+                precision / 2.0,
+                max_cf,
+                solar_profile,
+                wind_profile,
+                load_profile,
+                costs,
+                config,
+                cache,
+                battery_mode,
+                15,
+            )?;
+            warm_evals += cache.last_eval_count();
+            if (result.clean_match - target).abs() < (best.4.clean_match - target).abs() {
+                best = (best.0, best.1, best.2, cf, result);
+            }
+        }
+        // Still overshooting: the VRE alone overshoots — scale it down,
+        // mirroring the fast-pass finishing step.
+        if best.4.clean_match > target + precision {
+            let (polished, polish_evals) = polish_vre_overshoot_by_scaling(
+                best.0,
+                best.1,
+                best.2,
+                target,
+                precision / 2.0,
+                max_cf,
+                solar_profile,
+                wind_profile,
+                load_profile,
+                costs,
+                config,
+                cache,
+                battery_mode,
+                16,
+            )?;
+            warm_evals += polish_evals;
+            if let Some((ps, pw, pst, pcf, pres)) = polished {
+                if (pres.clean_match - target).abs() < (best.4.clean_match - target).abs() {
+                    best = (ps, pw, pst, pcf, pres);
+                }
+            }
+        }
+    }
+
+    if (best.4.clean_match - target).abs() > feasibility_tolerance {
+        return Ok(None);
+    }
+
+    Ok(Some(OptimizerResult {
+        solar_capacity: best.0,
+        wind_capacity: best.1,
+        storage_capacity: best.2,
+        clean_firm_capacity: best.3,
+        achieved_clean_match: best.4.clean_match,
+        lcoe: best.4.lcoe,
+        num_evaluations: warm_evals,
+        success: (best.4.clean_match - target).abs() < precision,
+    }))
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run_v2_optimizer_mode_with_cache(
     target: f64,
     solar_profile: &[f64],
@@ -486,31 +984,153 @@ fn run_v2_optimizer_mode_with_cache(
     mode: V2Mode,
     accurate_config: Option<&V2AccurateConfig>,
     cache: &mut EvalCache,
+    warm_start: Option<&OptimizerResult>,
 ) -> Result<(OptimizerResult, Option<V2AccurateDiagnostics>), String> {
-    let fast_start_ms = now_ms();
-    let fast_result = run_v2_optimizer_fast_with_cache(
-        target,
-        solar_profile,
-        wind_profile,
-        load_profile,
-        costs,
-        config,
-        battery_mode,
-        model,
-        cache,
-    )?;
-
-    if mode == V2Mode::Fast {
-        return Ok((fast_result, None));
+    // Self-consistent LCOE costs ~3 extra financial-loop passes per evaluation
+    // and re-ranks candidates by <0.5 normalized units (measured, F26). Search
+    // on the plain objective; reprice only the final answer honestly.
+    if costs.self_consistent_lcoe {
+        let mut search_costs = costs.clone();
+        search_costs.self_consistent_lcoe = false;
+        let (mut result, diagnostics) = run_v2_optimizer_mode_with_cache(
+            target,
+            solar_profile,
+            wind_profile,
+            load_profile,
+            &search_costs,
+            config,
+            battery_mode,
+            model,
+            mode,
+            accurate_config,
+            cache,
+            warm_start,
+        )?;
+        // Reprice under full semantics, bypassing the cache (it holds
+        // plain-LCOE values for these portfolios).
+        let sim_config = config.simulation_config_for_portfolio(
+            result.solar_capacity,
+            result.wind_capacity,
+            result.storage_capacity,
+            result.clean_firm_capacity,
+            battery_mode,
+        );
+        let sim = simulate_system(&sim_config, solar_profile, wind_profile, load_profile)?;
+        let lcoe = calculate_lcoe(
+            &sim,
+            result.solar_capacity,
+            result.wind_capacity,
+            result.storage_capacity,
+            result.clean_firm_capacity,
+            costs,
+        );
+        result.lcoe = lcoe.total_lcoe;
+        return Ok((result, diagnostics));
     }
 
-    let cfg = accurate_config.cloned().unwrap_or_default();
+    let fast_start_ms = now_ms();
+
+    // Warm-start continuation (sweep mode): re-size the previous target's
+    // portfolio for this target and, when feasible, skip the greedy/model fast
+    // pass entirely — the polish stage walks the warm seed to the new optimum
+    // (safe: the optimal path never folds across targets, F12).
+    let warm_result = if let Some(warm) = warm_start {
+        resize_warm_start_for_target(
+            warm,
+            target,
+            solar_profile,
+            wind_profile,
+            load_profile,
+            costs,
+            config,
+            battery_mode,
+            cache,
+        )?
+    } else {
+        None
+    };
+    let from_warm = warm_result.is_some();
+
+    let fast_result = match warm_result {
+        Some(result) => result,
+        None => run_v2_optimizer_fast_with_cache(
+            target,
+            solar_profile,
+            wind_profile,
+            load_profile,
+            costs,
+            config,
+            battery_mode,
+            model,
+            cache,
+        )?,
+    };
+
+    // Terminal targets (>= 99%) always get the polish stage, even in Fast mode: the
+    // fast pass can degenerate to an all-CF cover there (up to +48-56% LCOE vs dense
+    // ground truth; optimizer_research F20) and only the oblique-move polish walks CF
+    // back down the storage+CF frontier.
+    let force_terminal_polish = target >= 99.0;
+    // Fast mode below the terminal threshold gets a BOUNDED mini-polish when the
+    // target is high (fast is +1.5-3.2% vs corpus at t=90-98, F20) or when the
+    // result came from a warm start (which had no greedy search of its own).
+    let fast_mini_polish =
+        mode == V2Mode::Fast && !force_terminal_polish && (target >= 90.0 || from_warm);
+    if mode == V2Mode::Fast && !force_terminal_polish && !fast_mini_polish {
+        let closed = close_band_without_cf(
+            fast_result,
+            target,
+            solar_profile,
+            wind_profile,
+            load_profile,
+            costs,
+            config,
+            cache,
+            battery_mode,
+        )?;
+        return Ok((closed, None));
+    }
+
+    let cfg = if fast_mini_polish {
+        if from_warm {
+            fast_warm_polish_config(target)
+        } else {
+            fast_mini_polish_config()
+        }
+    } else if from_warm && !force_terminal_polish && accurate_config.is_none() {
+        // Warm-started accurate sweep targets: the seed is already near the
+        // valley floor, so the stall-triggered budget expansion (designed for
+        // cold greedy results) mostly buys cache churn, not quality. Trim the
+        // budgets; explicit caller configs are honored unchanged.
+        V2AccurateConfig {
+            max_extra_evals: 250,
+            adaptive_hard_max_extra_evals: 500,
+            multi_start_top_k: 3,
+            ..V2AccurateConfig::default()
+        }
+    } else {
+        accurate_config.cloned().unwrap_or_default()
+    };
     let fast_runtime_ms = now_ms() - fast_start_ms;
-    let extra_ms_budget = if cfg.max_extra_ms > 0.0 {
+    let mut extra_ms_budget = if cfg.max_extra_ms > 0.0 {
         cfg.max_extra_ms
     } else {
         fast_runtime_ms
     };
+    if from_warm && !fast_mini_polish {
+        // No fast pass ran, so fast_runtime_ms is just the cheap warm re-size.
+        // Give the polish (the only search stage on this path) a real time
+        // backstop; the eval caps remain the deterministic work limiter.
+        extra_ms_budget = extra_ms_budget.max(800.0);
+    }
+    if force_terminal_polish {
+        // The terminal CF walk-down (all-CF cover -> storage+CF frontier) needs more
+        // than the fast-pass runtime; don't let wall-clock truncate it. The eval cap
+        // (adaptive_hard_max_extra_evals) is the real work limiter — a generous time
+        // backstop keeps results deterministic under CPU contention (parallel tests,
+        // busy browsers) without unbounded latency.
+        extra_ms_budget = extra_ms_budget.max(2000.0);
+    }
 
     let (result, diagnostics) = run_v2_accurate_polish(
         target,
@@ -525,7 +1145,117 @@ fn run_v2_optimizer_mode_with_cache(
         &cfg,
         extra_ms_budget,
     )?;
+    let result = close_band_without_cf(
+        result,
+        target,
+        solar_profile,
+        wind_profile,
+        load_profile,
+        costs,
+        config,
+        cache,
+        battery_mode,
+    )?;
     Ok((result, Some(diagnostics)))
+}
+
+/// Final-mile band closer for configs where clean firm is DISABLED. CF is
+/// normally the precision instrument that lands clean_match inside the target
+/// band (binary-searched to +-precision); without it the pipeline can finish
+/// just outside the band on chunky renewable/storage steps (combos corpus:
+/// california no_cf t90 stalled at |dev| = 0.516). Bisect the smallest uniform
+/// scale-up of the enabled resources that re-enters the band; constraint
+/// compliance takes priority over the small LCOE increase it costs. No-op when
+/// CF is enabled or the result is already feasible.
+#[allow(clippy::too_many_arguments)]
+fn close_band_without_cf(
+    result: OptimizerResult,
+    target: f64,
+    solar_profile: &[f64],
+    wind_profile: &[f64],
+    load_profile: &[f64],
+    costs: &CostParams,
+    config: &OptimizerConfig,
+    cache: &mut EvalCache,
+    battery_mode: BatteryMode,
+) -> Result<OptimizerResult, String> {
+    let tolerance = V2AccurateConfig::default().target_tolerance;
+    let undershoot = target - tolerance - result.achieved_clean_match;
+    if config.enable_clean_firm || undershoot <= 0.0 {
+        return Ok(result);
+    }
+
+    let (s, w, st) = (
+        result.solar_capacity,
+        result.wind_capacity,
+        result.storage_capacity,
+    );
+    if s + w + st <= 1e-9 {
+        return Ok(result);
+    }
+    let mut max_scale: f64 = 3.0;
+    if s > 1e-9 {
+        max_scale = max_scale.min(config.max_solar / s);
+    }
+    if w > 1e-9 {
+        max_scale = max_scale.min(config.max_wind / w);
+    }
+    if st > 1e-9 {
+        max_scale = max_scale.min(config.max_storage / st);
+    }
+    if max_scale <= 1.0 {
+        return Ok(result); // saturated: band genuinely unreachable
+    }
+
+    // Smallest scale that re-enters the band = cheapest feasible correction.
+    let mut low = 1.0f64;
+    let mut high = max_scale;
+    let mut best: Option<(f64, f64, f64, EvalResult)> = None;
+    let mut extra_evals = 0u32;
+    for _ in 0..16 {
+        let scale = (low + high) / 2.0;
+        let (cs, cw, cst, _) =
+            clamp_candidate(s * scale, w * scale, st * scale, 0.0, config);
+        let eval = evaluate_cached(
+            cs,
+            cw,
+            cst,
+            0.0,
+            solar_profile,
+            wind_profile,
+            load_profile,
+            costs,
+            config,
+            cache,
+            battery_mode,
+        )?;
+        extra_evals += 1;
+        if eval.clean_match >= target - tolerance {
+            if eval.clean_match <= target + tolerance {
+                best = Some((cs, cw, cst, eval.clone()));
+            }
+            high = scale;
+        } else {
+            low = scale;
+        }
+        if high - low < 1e-4 {
+            break;
+        }
+    }
+
+    match best {
+        Some((cs, cw, cst, eval)) => Ok(OptimizerResult {
+            solar_capacity: cs,
+            wind_capacity: cw,
+            storage_capacity: cst,
+            clean_firm_capacity: 0.0,
+            achieved_clean_match: eval.clean_match,
+            lcoe: eval.lcoe,
+            num_evaluations: result.num_evaluations.saturating_add(extra_evals),
+            success: (eval.clean_match - target).abs() < V2Config::default().precision,
+        }),
+        None => Ok(result),
+    }
 }
 
 /// Internal fast-path optimizer entrypoint that accepts an external cache.
@@ -601,10 +1331,46 @@ fn run_v2_optimizer_fast_with_cache(
     )?;
     total_evals += cache.last_eval_count();
 
+    let (final_solar, final_wind, final_storage, final_cf, final_result) =
+        if final_result.clean_match > target + v2_config.precision {
+            let (polished, polish_evals) = polish_vre_overshoot_by_scaling(
+                best.solar,
+                best.wind,
+                best.storage,
+                target,
+                v2_config.precision / 2.0,
+                if config.enable_clean_firm {
+                    config.max_clean_firm
+                } else {
+                    0.0
+                },
+                solar_profile,
+                wind_profile,
+                load_profile,
+                costs,
+                config,
+                cache,
+                battery_mode,
+                16,
+            )?;
+            total_evals += polish_evals;
+            if let Some((solar, wind, storage, cf, result)) = polished {
+                if (result.clean_match - target).abs() < (final_result.clean_match - target).abs() {
+                    (solar, wind, storage, cf, result)
+                } else {
+                    (best.solar, best.wind, best.storage, final_cf, final_result)
+                }
+            } else {
+                (best.solar, best.wind, best.storage, final_cf, final_result)
+            }
+        } else {
+            (best.solar, best.wind, best.storage, final_cf, final_result)
+        };
+
     Ok(OptimizerResult {
-        solar_capacity: best.solar,
-        wind_capacity: best.wind,
-        storage_capacity: best.storage,
+        solar_capacity: final_solar,
+        wind_capacity: final_wind,
+        storage_capacity: final_storage,
         clean_firm_capacity: final_cf,
         achieved_clean_match: final_result.clean_match,
         lcoe: final_result.lcoe,
@@ -796,8 +1562,101 @@ fn polish_seed_local(
     max_extra_evals: u32,
 ) -> Result<(EvalResult, bool, bool), String> {
     let mut local_best = seed.clone();
+    let banked_best = seed.clone();
     let mut any_stage_improved = false;
     let mut first_stage_improved = false;
+
+    // Band-edge recentering (F22 round 3): accurate-mode solutions ride
+    // clean_match = target - tolerance to buy LCOE, which leaves no slack for
+    // approximately-iso-match exchange moves — any tiny match loss goes
+    // infeasible and the exchange walk never starts. Step slightly off the edge
+    // first; `banked_best` guarantees this can never worsen the returned result.
+    let lower_edge = target - accurate_cfg.target_tolerance;
+    let slack = local_best.clean_match - lower_edge;
+    if slack < 0.15
+        && !budget_exhausted(
+            polish_start_ms,
+            extra_ms_budget,
+            *extra_evals,
+            max_extra_evals,
+        )
+    {
+        let need = 0.25 - slack;
+        let recenter_probes: [(f64, f64, f64, f64, bool); 4] = [
+            (0.0, 0.0, 0.0, 2.0, config.enable_clean_firm),
+            (10.0, 0.0, 0.0, 0.0, config.enable_solar),
+            (0.0, 10.0, 0.0, 0.0, config.enable_wind),
+            (0.0, 0.0, 20.0, 0.0, config.enable_storage),
+        ];
+        'recenter: for (ds, dw, dst, dcf, res_enabled) in recenter_probes {
+            if !res_enabled {
+                continue;
+            }
+            let probe = clamp_candidate(
+                local_best.solar + ds,
+                local_best.wind + dw,
+                local_best.storage + dst,
+                local_best.clean_firm + dcf,
+                config,
+            );
+            if same_point(&local_best, probe) {
+                continue;
+            }
+            let probe_eval = evaluate_with_miss_tracking(
+                probe.0,
+                probe.1,
+                probe.2,
+                probe.3,
+                solar_profile,
+                wind_profile,
+                load_profile,
+                costs,
+                config,
+                cache,
+                battery_mode,
+                extra_evals,
+            )?;
+            let gained = probe_eval.clean_match - local_best.clean_match;
+            if gained <= 1e-6 {
+                continue;
+            }
+            // Scale the probe delta to gain roughly `need` match points.
+            let scale = (need / gained).clamp(0.25, 4.0);
+            let stepped = clamp_candidate(
+                local_best.solar + ds * scale,
+                local_best.wind + dw * scale,
+                local_best.storage + dst * scale,
+                local_best.clean_firm + dcf * scale,
+                config,
+            );
+            let stepped_eval = if same_point(&local_best, stepped) {
+                probe_eval.clone()
+            } else {
+                evaluate_with_miss_tracking(
+                    stepped.0,
+                    stepped.1,
+                    stepped.2,
+                    stepped.3,
+                    solar_profile,
+                    wind_profile,
+                    load_profile,
+                    costs,
+                    config,
+                    cache,
+                    battery_mode,
+                    extra_evals,
+                )?
+            };
+            for cand in [stepped_eval, probe_eval] {
+                if is_feasible(cand.clean_match, target, accurate_cfg.target_tolerance)
+                    && cand.clean_match > local_best.clean_match + 1e-6
+                {
+                    local_best = cand;
+                    break 'recenter;
+                }
+            }
+        }
+    }
 
     for (stage_idx, stage) in stage_schedule.iter().enumerate() {
         if budget_exhausted(
@@ -839,54 +1698,145 @@ fn polish_seed_local(
             any_stage_improved |= cf_improved;
         }
 
-        let moves = generate_stage_moves(sw_step, st_step, cf_step, config);
-        for (ds, dw, dst, dcf) in moves {
-            if budget_exhausted(
-                polish_start_ms,
-                extra_ms_budget,
-                *extra_evals,
-                max_extra_evals,
-            ) {
-                break;
-            }
-
-            let candidate = clamp_candidate(
-                local_best.solar + ds,
-                local_best.wind + dw,
-                local_best.storage + dst,
-                local_best.clean_firm + dcf,
-                config,
-            );
-            if same_point(&local_best, candidate) {
-                continue;
-            }
-
-            let eval = evaluate_with_miss_tracking(
-                candidate.0,
-                candidate.1,
-                candidate.2,
-                candidate.3,
+        let mut moves = generate_stage_moves(sw_step, st_step, cf_step, config);
+        // Point-adaptive iso-match exchange moves from locally measured slopes
+        // (F22 round 3): fixes zone-ratio drift that strands hard-coded oblique
+        // templates outside the feasibility band.
+        if !budget_exhausted(
+            polish_start_ms,
+            extra_ms_budget,
+            *extra_evals,
+            max_extra_evals,
+        ) {
+            let slopes = measure_match_sensitivities(
+                &local_best,
+                sw_step,
+                st_step,
+                cf_step,
                 solar_profile,
                 wind_profile,
                 load_profile,
                 costs,
                 config,
-                cache,
                 battery_mode,
+                cache,
                 extra_evals,
             )?;
+            moves.extend(generate_adaptive_exchange_moves(
+                slopes, sw_step, st_step, cf_step, config,
+            ));
+        }
+        // Repeat the sweep until no move improves: long walks along an exchange
+        // direction (e.g. storage -> CF at terminal targets) need many consecutive
+        // steps, and a single sweep advances at most one step per direction
+        // (optimizer_research F22: the "distant exchange" failure class).
+        let mut stage_rounds = 0u32;
+        'rounds: loop {
+            let mut improved_this_round = false;
+            for &(ds, dw, dst, dcf) in &moves {
+                if budget_exhausted(
+                    polish_start_ms,
+                    extra_ms_budget,
+                    *extra_evals,
+                    max_extra_evals,
+                ) {
+                    break 'rounds;
+                }
 
-            if is_feasible(eval.clean_match, target, accurate_cfg.target_tolerance)
-                && local_best.lcoe - eval.lcoe >= accurate_cfg.lcoe_improve_min
-            {
-                let previous = local_best.clone();
-                local_best = eval;
-                improved_dimensions.mark_delta(&previous, &local_best);
-                *accepted_moves = accepted_moves.saturating_add(1);
-                improved_in_stage = true;
-                any_stage_improved = true;
-            } else if is_feasible(eval.clean_match, target, accurate_cfg.target_tolerance) {
-                *rejected_feasible_moves = rejected_feasible_moves.saturating_add(1);
+                let candidate = clamp_candidate(
+                    local_best.solar + ds,
+                    local_best.wind + dw,
+                    local_best.storage + dst,
+                    local_best.clean_firm + dcf,
+                    config,
+                );
+                if same_point(&local_best, candidate) {
+                    continue;
+                }
+
+                let eval = evaluate_with_miss_tracking(
+                    candidate.0,
+                    candidate.1,
+                    candidate.2,
+                    candidate.3,
+                    solar_profile,
+                    wind_profile,
+                    load_profile,
+                    costs,
+                    config,
+                    cache,
+                    battery_mode,
+                    extra_evals,
+                )?;
+
+                if is_feasible(eval.clean_match, target, accurate_cfg.target_tolerance)
+                    && local_best.lcoe - eval.lcoe >= accurate_cfg.lcoe_improve_min
+                {
+                    let previous = local_best.clone();
+                    local_best = eval;
+                    improved_dimensions.mark_delta(&previous, &local_best);
+                    *accepted_moves = accepted_moves.saturating_add(1);
+                    improved_in_stage = true;
+                    any_stage_improved = true;
+                    improved_this_round = true;
+
+                    // Accelerate: keep stepping along the same direction while it
+                    // keeps improving (cheap directional line search).
+                    loop {
+                        if budget_exhausted(
+                            polish_start_ms,
+                            extra_ms_budget,
+                            *extra_evals,
+                            max_extra_evals,
+                        ) {
+                            break;
+                        }
+                        let next = clamp_candidate(
+                            local_best.solar + ds,
+                            local_best.wind + dw,
+                            local_best.storage + dst,
+                            local_best.clean_firm + dcf,
+                            config,
+                        );
+                        if same_point(&local_best, next) {
+                            break;
+                        }
+                        let next_eval = evaluate_with_miss_tracking(
+                            next.0,
+                            next.1,
+                            next.2,
+                            next.3,
+                            solar_profile,
+                            wind_profile,
+                            load_profile,
+                            costs,
+                            config,
+                            cache,
+                            battery_mode,
+                            extra_evals,
+                        )?;
+                        if is_feasible(
+                            next_eval.clean_match,
+                            target,
+                            accurate_cfg.target_tolerance,
+                        ) && local_best.lcoe - next_eval.lcoe
+                            >= accurate_cfg.lcoe_improve_min
+                        {
+                            let prev = local_best.clone();
+                            local_best = next_eval;
+                            improved_dimensions.mark_delta(&prev, &local_best);
+                            *accepted_moves = accepted_moves.saturating_add(1);
+                        } else {
+                            break;
+                        }
+                    }
+                } else if is_feasible(eval.clean_match, target, accurate_cfg.target_tolerance) {
+                    *rejected_feasible_moves = rejected_feasible_moves.saturating_add(1);
+                }
+            }
+            stage_rounds += 1;
+            if !improved_this_round || stage_rounds >= 25 {
+                break;
             }
         }
 
@@ -896,6 +1846,11 @@ fn polish_seed_local(
         if !improved_in_stage {
             break;
         }
+    }
+
+    // Recentering safety net: never return worse than the seed we started from.
+    if banked_best.lcoe + 1e-9 < local_best.lcoe {
+        local_best = banked_best;
     }
 
     Ok((local_best, any_stage_improved, first_stage_improved))
@@ -946,24 +1901,32 @@ fn run_v2_accurate_polish(
         max_extra_evals = max_extra_evals.max(accurate_cfg.adaptive_hard_max_extra_evals);
     }
     let stage_schedule = build_stage_schedule(&accurate_cfg.step_schedule);
-    let seeds = select_multistart_seeds(
-        target,
-        accurate_cfg.target_tolerance,
-        accurate_cfg.multi_start_top_k,
-        &start_eval,
-        &stage_schedule,
-        solar_profile,
-        wind_profile,
-        load_profile,
-        costs,
-        config,
-        battery_mode,
-        cache,
-        &mut extra_evals,
-        polish_start_ms,
-        extra_ms_budget,
-        max_extra_evals,
-    )?;
+    // multi_start_top_k <= 1 means "no multi-start": descend from the start
+    // point directly instead of spending the eval budget probing seed
+    // candidates around it (the bounded fast-mode mini-polish relies on this —
+    // with an 80-eval cap, breadth probing would consume the entire budget).
+    let seeds = if accurate_cfg.multi_start_top_k <= 1 {
+        vec![start_eval.clone()]
+    } else {
+        select_multistart_seeds(
+            target,
+            accurate_cfg.target_tolerance,
+            accurate_cfg.multi_start_top_k,
+            &start_eval,
+            &stage_schedule,
+            solar_profile,
+            wind_profile,
+            load_profile,
+            costs,
+            config,
+            battery_mode,
+            cache,
+            &mut extra_evals,
+            polish_start_ms,
+            extra_ms_budget,
+            max_extra_evals,
+        )?
+    };
 
     for (seed_idx, seed) in seeds.iter().enumerate() {
         if let Some(reason) = budget_stop_reason(
@@ -1226,6 +2189,159 @@ fn generate_stage_moves(
         }
     }
 
+    // Oblique exchange-direction moves (optimizer_research/LANDSCAPE_FINDINGS.md
+    // F12/F19/F21). The near-optimal set is a flat plane of resource exchanges;
+    // per-axis and uniform-pair moves change clean_match too much to survive the
+    // feasibility gate, so descent stalls on that plane. These templates are scaled
+    // to be roughly iso-clean-match.
+    if config.enable_clean_firm && cf_step > 0.0 {
+        for &sign in &signs {
+            let c = sign * cf_step;
+            // ~1 MW CF <-> ~3.7 MW wind (+ ~1.7 MWh storage when available)
+            if config.enable_wind {
+                moves.push((0.0, 3.7 * c, 0.0, -c));
+                if config.enable_storage {
+                    moves.push((0.0, 3.7 * c, 1.7 * c, -c));
+                }
+            }
+            // ~1 MW CF <-> solar + storage
+            if config.enable_solar && config.enable_storage {
+                moves.push((1.4 * c, 0.0, 1.7 * c, -c));
+            }
+        }
+    }
+    if config.enable_solar && config.enable_wind && sw_step > 0.0 {
+        // Iso-match solar<->wind exchange (~1.27 MW solar per MW wind)
+        for &sign in &signs {
+            let s = sign * sw_step;
+            moves.push((1.27 * s, -s, 0.0, 0.0));
+        }
+    }
+    if config.enable_storage && config.enable_clean_firm && st_step > 0.0 {
+        // Fine storage<->CF ratios: 1 MW CF moves clean_match ~10x more than
+        // 2 MWh storage, so escaping storage/CF stall ridges needs small CF
+        // deltas per storage step.
+        for &sign in &signs {
+            let st = sign * st_step;
+            moves.push((0.0, 0.0, st, -0.05 * st));
+            moves.push((0.0, 0.0, st, -0.1 * st));
+        }
+    }
+
+    moves
+}
+
+/// Per-unit clean-match slopes (per MW solar/wind/CF, per MWh storage), measured
+/// at `base` by one-step finite differences. Cache-friendly: the probe points
+/// coincide with axis moves the stage sweep evaluates anyway. Disabled resources
+/// (or zero steps) report slope 0.
+#[allow(clippy::too_many_arguments)]
+fn measure_match_sensitivities(
+    base: &EvalResult,
+    sw_step: f64,
+    st_step: f64,
+    cf_step: f64,
+    solar_profile: &[f64],
+    wind_profile: &[f64],
+    load_profile: &[f64],
+    costs: &CostParams,
+    config: &OptimizerConfig,
+    battery_mode: BatteryMode,
+    cache: &mut EvalCache,
+    extra_evals: &mut u32,
+) -> Result<[f64; 4], String> {
+    let mut slopes = [0.0f64; 4];
+    let axes: [(f64, f64, f64, f64, bool, f64); 4] = [
+        (sw_step, 0.0, 0.0, 0.0, config.enable_solar, sw_step),
+        (0.0, sw_step, 0.0, 0.0, config.enable_wind, sw_step),
+        (0.0, 0.0, st_step, 0.0, config.enable_storage, st_step),
+        (0.0, 0.0, 0.0, cf_step, config.enable_clean_firm, cf_step),
+    ];
+    for (i, (ds, dw, dst, dcf, enabled, step)) in axes.into_iter().enumerate() {
+        if !enabled || step <= 0.0 {
+            continue;
+        }
+        // Probe upward; at an upper bound fall back to a downward probe.
+        let mut sign = 1.0;
+        let mut cand = clamp_candidate(
+            base.solar + ds,
+            base.wind + dw,
+            base.storage + dst,
+            base.clean_firm + dcf,
+            config,
+        );
+        if same_point(base, cand) {
+            sign = -1.0;
+            cand = clamp_candidate(
+                base.solar - ds,
+                base.wind - dw,
+                base.storage - dst,
+                base.clean_firm - dcf,
+                config,
+            );
+            if same_point(base, cand) {
+                continue;
+            }
+        }
+        let eval = evaluate_with_miss_tracking(
+            cand.0,
+            cand.1,
+            cand.2,
+            cand.3,
+            solar_profile,
+            wind_profile,
+            load_profile,
+            costs,
+            config,
+            cache,
+            battery_mode,
+            extra_evals,
+        )?;
+        slopes[i] = sign * (eval.clean_match - base.clean_match) / step;
+    }
+    Ok(slopes)
+}
+
+/// Point-adaptive iso-clean-match exchange moves: give one step of resource A,
+/// take the match back with resource B at the LOCALLY measured ratio. The
+/// hard-coded oblique ratios above are CA-calibrated averages; in other zones
+/// (or far from those calibration points) they drift out of the feasibility
+/// band and the exchange walk never starts (F22 round 3).
+fn generate_adaptive_exchange_moves(
+    slopes: [f64; 4],
+    sw_step: f64,
+    st_step: f64,
+    cf_step: f64,
+    config: &OptimizerConfig,
+) -> Vec<(f64, f64, f64, f64)> {
+    const MIN_SLOPE: f64 = 1e-5;
+    let enabled = [
+        config.enable_solar,
+        config.enable_wind,
+        config.enable_storage,
+        config.enable_clean_firm,
+    ];
+    let steps = [sw_step, sw_step, st_step, cf_step];
+    let mut moves = Vec::new();
+    for give in 0..4 {
+        if !enabled[give] || steps[give] <= 0.0 || slopes[give] <= MIN_SLOPE {
+            continue;
+        }
+        for take in 0..4 {
+            if take == give || !enabled[take] || steps[take] <= 0.0 || slopes[take] <= MIN_SLOPE
+            {
+                continue;
+            }
+            let comp = slopes[give] * steps[give] / slopes[take];
+            if comp > 8.0 * steps[take] {
+                continue;
+            }
+            let mut delta = [0.0f64; 4];
+            delta[give] = -steps[give];
+            delta[take] = comp;
+            moves.push((delta[0], delta[1], delta[2], delta[3]));
+        }
+    }
     moves
 }
 
@@ -2219,6 +3335,11 @@ fn run_greedy_phase(
     let mut step_size = 50.0;
     let min_step = 10.0;
     let min_match_gain = 0.1;
+    // F9 fix: minimum LCOE decrease ($/MWh) for a "free improvement" move —
+    // a move that lowers LCOE without losing clean match (e.g. storage trimming
+    // peak-gas capacity cost). Such moves have ~0 match gain and are invisible
+    // to the efficiency = dLCOE/dMatch ranking (see LANDSCAPE_FINDINGS F9).
+    let free_move_min_lcoe_drop = 0.01;
     let max_no_improve_steps = 3u32;
     let max_cf_guard_steps = 2u32;
     let cf_guard_multiplier = 1.05;
@@ -2278,6 +3399,16 @@ fn run_greedy_phase(
     for _ in 0..100 {
         let mut best_move: Option<(f64, f64, f64, EvalResult)> = None;
         let mut best_efficiency = f64::INFINITY;
+        // F9 fix: track "free improvement" candidates (LCOE down, match not down)
+        // separately — they are accepted ahead of the efficiency ranking.
+        let mut best_free: Option<(f64, f64, f64, EvalResult)> = None;
+        let mut best_free_drop = 0.0f64;
+        // F9 fix: once the trajectory is inside the target band, moves that exit
+        // it upward are never accepted — overshoot states can never become valid
+        // frontier candidates (CF fill only adds match), and marching past the
+        // band preempts the in-band free-improvement trims (e.g. storage moves
+        // that cut peak-gas capacity cost at ~zero match gain).
+        let in_band = current.clean_match >= target - accept_tolerance;
 
         // Try adding solar
         if config.enable_solar && solar + step_size <= config.max_solar {
@@ -2297,7 +3428,22 @@ fn run_greedy_phase(
             ) {
                 eval_count += 1;
                 let match_gain = result.clean_match - current.clean_match;
-                if match_gain > min_match_gain {
+                let lcoe_drop = current.lcoe - result.lcoe;
+                let band_ok = !in_band || result.clean_match <= target + accept_tolerance;
+                // In-band, coarse match-gaining moves just climb the band at rising
+                // LCOE and trigger the no-improve break before the step shrinks far
+                // enough to expose fine free-improvement trims; only accept them at
+                // min-step granularity so the step schedule shrinks first.
+                let eff_ok = band_ok && (!in_band || step_size <= min_step);
+                if band_ok
+                    && lcoe_drop >= free_move_min_lcoe_drop
+                    && match_gain >= -1e-9
+                    && lcoe_drop > best_free_drop
+                {
+                    best_free_drop = lcoe_drop;
+                    best_free = Some((test_solar, wind, storage, result.clone()));
+                }
+                if eff_ok && match_gain > min_match_gain {
                     let efficiency = (result.lcoe - current.lcoe) / match_gain;
                     if efficiency < best_efficiency {
                         best_efficiency = efficiency;
@@ -2325,7 +3471,22 @@ fn run_greedy_phase(
             ) {
                 eval_count += 1;
                 let match_gain = result.clean_match - current.clean_match;
-                if match_gain > min_match_gain {
+                let lcoe_drop = current.lcoe - result.lcoe;
+                let band_ok = !in_band || result.clean_match <= target + accept_tolerance;
+                // In-band, coarse match-gaining moves just climb the band at rising
+                // LCOE and trigger the no-improve break before the step shrinks far
+                // enough to expose fine free-improvement trims; only accept them at
+                // min-step granularity so the step schedule shrinks first.
+                let eff_ok = band_ok && (!in_band || step_size <= min_step);
+                if band_ok
+                    && lcoe_drop >= free_move_min_lcoe_drop
+                    && match_gain >= -1e-9
+                    && lcoe_drop > best_free_drop
+                {
+                    best_free_drop = lcoe_drop;
+                    best_free = Some((solar, test_wind, storage, result.clone()));
+                }
+                if eff_ok && match_gain > min_match_gain {
                     let efficiency = (result.lcoe - current.lcoe) / match_gain;
                     if efficiency < best_efficiency {
                         best_efficiency = efficiency;
@@ -2353,7 +3514,22 @@ fn run_greedy_phase(
             ) {
                 eval_count += 1;
                 let match_gain = result.clean_match - current.clean_match;
-                if match_gain > min_match_gain {
+                let lcoe_drop = current.lcoe - result.lcoe;
+                let band_ok = !in_band || result.clean_match <= target + accept_tolerance;
+                // In-band, coarse match-gaining moves just climb the band at rising
+                // LCOE and trigger the no-improve break before the step shrinks far
+                // enough to expose fine free-improvement trims; only accept them at
+                // min-step granularity so the step schedule shrinks first.
+                let eff_ok = band_ok && (!in_band || step_size <= min_step);
+                if band_ok
+                    && lcoe_drop >= free_move_min_lcoe_drop
+                    && match_gain >= -1e-9
+                    && lcoe_drop > best_free_drop
+                {
+                    best_free_drop = lcoe_drop;
+                    best_free = Some((solar, wind, test_storage, result.clone()));
+                }
+                if eff_ok && match_gain > min_match_gain {
                     let efficiency = (result.lcoe - current.lcoe) / match_gain;
                     if efficiency < best_efficiency {
                         best_efficiency = efficiency;
@@ -2363,7 +3539,12 @@ fn run_greedy_phase(
             }
         }
 
-        let Some((s, w, st, result)) = best_move else {
+        // F9 fix: a "free improvement" (LCOE strictly down, clean match not down)
+        // is accepted immediately, ahead of the efficiency ranking. It stops being
+        // taken as soon as the LCOE decrease falls below the threshold, so
+        // termination stays bounded by the iteration cap and step shrinking.
+        let took_free = best_free.is_some();
+        let Some((s, w, st, result)) = best_free.or(best_move) else {
             // No improving move at this step size, reduce it
             step_size = (step_size / 2.0).max(min_step);
             if step_size <= min_step {
@@ -2372,14 +3553,16 @@ fn run_greedy_phase(
             continue;
         };
 
-        if let Some(cf_eff) = cf_efficiency {
-            if cf_eff > 0.0 && best_efficiency > cf_eff * cf_guard_multiplier {
-                cf_guard_steps += 1;
-                if cf_guard_steps >= max_cf_guard_steps {
-                    break;
+        if !took_free {
+            if let Some(cf_eff) = cf_efficiency {
+                if cf_eff > 0.0 && best_efficiency > cf_eff * cf_guard_multiplier {
+                    cf_guard_steps += 1;
+                    if cf_guard_steps >= max_cf_guard_steps {
+                        break;
+                    }
+                } else {
+                    cf_guard_steps = 0;
                 }
-            } else {
-                cf_guard_steps = 0;
             }
         }
 
@@ -2590,6 +3773,8 @@ pub fn run_v2_sweep(
     battery_mode: BatteryMode,
     model: Option<&EmpiricalModel>,
 ) -> Result<Vec<OptimizerResult>, String> {
+    // Production default is Accurate; warm-start continuation keeps full-ladder
+    // sweeps fast (~1.8s per 21-target zone sweep) at the certified quality bar.
     run_v2_sweep_mode(
         targets,
         solar_profile,
@@ -2599,7 +3784,7 @@ pub fn run_v2_sweep(
         config,
         battery_mode,
         model,
-        V2Mode::Fast,
+        V2Mode::Accurate,
         None,
     )
 }
@@ -2624,6 +3809,14 @@ pub fn run_v2_sweep_mode(
         let mut target_config = config.clone();
         target_config.target_clean_match = target;
 
+        // Warm-start continuation: carry the previous target's portfolio forward
+        // (F12: the optimal path never folds across targets). Only feasible
+        // previous results are usable seeds; infeasible ones fall back to the
+        // full per-target pipeline inside run_v2_optimizer_mode_with_cache.
+        let warm_start = results
+            .last()
+            .filter(|prev: &&OptimizerResult| prev.lcoe.is_finite() && prev.lcoe > 0.0);
+
         let (result, _) = run_v2_optimizer_mode_with_cache(
             target,
             solar_profile,
@@ -2636,6 +3829,7 @@ pub fn run_v2_sweep_mode(
             mode,
             accurate_config,
             &mut sweep_cache,
+            warm_start,
         )?;
         results.push(result);
     }

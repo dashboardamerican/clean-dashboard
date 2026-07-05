@@ -205,12 +205,12 @@ export const MetricsPanel: React.FC<MetricsPanelProps> = ({ onOpenMetricsModal }
         break;
       case 'solar_system_value':
         value = metrics.solar_system_value;
-        if (value === null) return renderCalculatingPlaceholder(def.label, 'ELCC+pricing');
+        if (value === null) return renderCalculatingPlaceholder(def.label, 'ELCC');
         color = COLORS.solar;
         break;
       case 'wind_system_value':
         value = metrics.wind_system_value;
-        if (value === null) return renderCalculatingPlaceholder(def.label, 'ELCC+pricing');
+        if (value === null) return renderCalculatingPlaceholder(def.label, 'ELCC');
         color = COLORS.wind;
         break;
       case 'land_use':

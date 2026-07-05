@@ -110,7 +110,7 @@ export const useSettingsStore = create<SettingsState>()(
     })),
     {
       name: 'energy-simulator-settings',
-      version: 3, // Increment when adding new fields to force migration
+      version: 4, // Increment when adding new fields to force migration
       partialize: (state) => ({ costs: state.costs, currentPreset: state.currentPreset }),
       // Merge persisted state with defaults to ensure new fields are present
       merge: (persistedState, currentState) => {

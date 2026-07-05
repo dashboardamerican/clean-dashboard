@@ -45,6 +45,7 @@ pub fn calculate_elcc(
             battery_efficiency,
             max_demand_response,
             battery_mode,
+            ..SimulationConfig::with_defaults()
         };
         let result = simulate_system(&config, solar_profile, wind_profile, load_profile)?;
         Ok(result.peak_gas)
@@ -280,8 +281,7 @@ pub fn calculate_elcc(
     // This preserves sum(Delta) ≈ Portfolio ELCC.
     let mut solar_delta_mw = solar_last_in_total_mw + allocate_effect(solar_last_in_total_mw);
     let mut wind_delta_mw = wind_last_in_total_mw + allocate_effect(wind_last_in_total_mw);
-    let mut storage_delta_mw =
-        storage_last_in_total_mw + allocate_effect(storage_last_in_total_mw);
+    let mut storage_delta_mw = storage_last_in_total_mw + allocate_effect(storage_last_in_total_mw);
     let mut cf_delta_mw = cf_last_in_total_mw + allocate_effect(cf_last_in_total_mw);
 
     // Redistribute negatives → 0, deficit goes proportionally to positives.

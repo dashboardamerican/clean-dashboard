@@ -267,7 +267,16 @@ export function getAvailableZones(): string[] {
  * Models for Default and PeakShaver modes are not available.
  */
 export function hasModel(zone: string, batteryMode?: BatteryMode): boolean {
+  // DISABLED 2026-07-05 (MODELCERT audit): the model pre-filter ranks candidates
+  // by a tax-blind simplified cost and seeds wrong-region portfolios that greedy
+  // cannot escape across the flat valley floor — deployed-path errors averaged
+  // +2.3% LCOE with a worst case of +14.9% (texas t85) vs ground truth, versus
+  // +1.15%/+3.4% without the model. The ~250ms speedup is not a defensible trade.
+  // Re-enable only after the model path is re-certified (optimizer_research/).
+  return false;
+
   // Only Hybrid mode models are available
+  // eslint-disable-next-line no-unreachable
   if (batteryMode !== undefined && batteryMode !== BatteryMode.Hybrid) {
     debugLog(`[ModelLoader] hasModel(${zone}, ${batteryMode}) = false (not Hybrid mode)`);
     return false;

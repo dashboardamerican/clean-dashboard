@@ -361,5 +361,16 @@ export const useSimulationStore = create<SimulationState>()(
 // Register callback so cost changes trigger simulation re-run
 import { setOnCostsChangeCallback } from './settingsStore';
 setOnCostsChangeCallback(() => {
-  useSimulationStore.getState().runSimulation();
+  void import('./costOptimizerStore')
+    .then(({ useCostOptimizerStore }) => {
+      const optimizer = useCostOptimizerStore.getState();
+      if (optimizer.mode === 'costOptimized') {
+        optimizer.scheduleAutoOptimize();
+      } else {
+        void useSimulationStore.getState().runSimulation();
+      }
+    })
+    .catch(() => {
+      void useSimulationStore.getState().runSimulation();
+    });
 });

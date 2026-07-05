@@ -8,6 +8,8 @@
 ///
 /// Target performance: <20ms simulation, <20ms optimization per target
 pub mod economics;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod eval;
 pub mod optimizer;
 pub mod simulation;
 pub mod types;

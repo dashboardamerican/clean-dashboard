@@ -59,6 +59,7 @@ fn evaluate(
         battery_efficiency: 0.85,
         max_demand_response: 0.0,
         battery_mode: BatteryMode::Hybrid,
+        ..SimulationConfig::with_defaults()
     };
 
     let sim = simulate_system(&config, solar_profile, wind_profile, load_profile).ok()?;

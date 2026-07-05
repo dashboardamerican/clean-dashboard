@@ -1,9 +1,9 @@
 use super::types::{
     compare_points, is_feasible, EvaluatedPoint, V3Diagnostics, V3Result, V3SearchConfig,
 };
-use std::cmp::Ordering;
 use super::{build_axis, evaluate_clean_match, evaluate_point};
 use crate::types::{BatteryMode, CostParams};
+use std::cmp::Ordering;
 use std::collections::HashSet;
 
 #[cfg(feature = "native")]
@@ -229,18 +229,18 @@ fn evaluate_triples(
     for &(solar, wind, storage) in triples {
         outcomes.push(evaluate_single_triple(
             solar,
-                wind,
-                storage,
-                cf_values,
+            wind,
+            storage,
+            cf_values,
             target,
             solar_profile,
-                wind_profile,
-                load_profile,
-                costs,
-                battery_mode,
-                config.target_tolerance,
-                config,
-            )?);
+            wind_profile,
+            load_profile,
+            costs,
+            battery_mode,
+            config.target_tolerance,
+            config,
+        )?);
     }
 
     Ok(outcomes)
@@ -446,10 +446,7 @@ fn evaluate_single_triple(
     })
 }
 
-fn build_refine_triples(
-    seed: (f64, f64, f64),
-    config: &V3SearchConfig,
-) -> Vec<(f64, f64, f64)> {
+fn build_refine_triples(seed: (f64, f64, f64), config: &V3SearchConfig) -> Vec<(f64, f64, f64)> {
     if config.local_refine_radius == 0 || config.local_refine_step_divisor <= 1.0 {
         return Vec::new();
     }
@@ -467,7 +464,9 @@ fn build_refine_triples(
     let max_storage = config.max_storage;
 
     let mut triples = Vec::with_capacity(
-        usize::try_from(radius).map(|r| (2 * r + 1).pow(3)).unwrap_or(0),
+        usize::try_from(radius)
+            .map(|r| (2 * r + 1).pow(3))
+            .unwrap_or(0),
     );
 
     for ds in -radius..=radius {

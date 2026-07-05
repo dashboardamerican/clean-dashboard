@@ -117,3 +117,25 @@ path = "src/bin/adaptive_audit_v2.rs"
 name = "v3_compare"
 path = "src/bin/v3_compare.rs"
 required-features = ["experimental-v3"]
+
+[[bin]]
+name = "optimizer_eval"
+path = "src/bin/optimizer_eval.rs"
+
+[[bin]]
+name = "optimizer_validate"
+path = "src/bin/optimizer_validate.rs"
+
+[[bin]]
+name = "optimizer_compare"
+path = "src/bin/optimizer_compare.rs"
+
+[[bin]]
+name = "landscape_probe"
+path = "src/bin/landscape_probe.rs"
+required-features = ["native"]
+
+[[bin]]
+name = "optimizer_bench"
+path = "src/bin/optimizer_bench.rs"
+required-features = ["native"]

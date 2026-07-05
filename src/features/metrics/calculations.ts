@@ -129,12 +129,12 @@ export function calculateMetrics(
     ? calculateMarketValue(simulation.wind_out, pricingResult.hourly_prices)
     : null;
 
-  // Solar/Wind System Values - include capacity value from ELCC
-  const solar_system_value = elccResult && pricingResult
-    ? calculateSystemValue('solar', simulation, config, elccResult, pricingResult, costs)
+  // Solar/Wind System Values - physical avoided gas fuel + gas capacity
+  const solar_system_value = elccResult
+    ? calculateSystemValue('solar', simulation, config, elccResult, costs)
     : null;
-  const wind_system_value = elccResult && pricingResult
-    ? calculateSystemValue('wind', simulation, config, elccResult, pricingResult, costs)
+  const wind_system_value = elccResult
+    ? calculateSystemValue('wind', simulation, config, elccResult, costs)
     : null;
 
   // Land Use - convert from acres to mi² (640 acres = 1 mi²)
@@ -251,14 +251,13 @@ function calculateMarketValue(
 }
 
 /**
- * Calculate system value (market value + capacity value) for a resource
+ * Calculate physical system value from avoided gas fuel and gas capacity.
  */
 function calculateSystemValue(
   resource: 'solar' | 'wind',
   simulation: SimulationResult,
   config: SimulationConfig,
   elcc: ElccResult,
-  pricing: PricingResult,
   costs: CostParams
 ): number {
   const generation = resource === 'solar' ? simulation.solar_out : simulation.wind_out;
@@ -267,36 +266,50 @@ function calculateSystemValue(
   const totalGen = generation.reduce((a, b) => a + b, 0);
   if (totalGen <= 0 || capacity <= 0) return 0;
 
-  // Energy value (market value)
-  const marketValue = calculateMarketValue(generation, pricing.hourly_prices);
-
-  // Capacity value based on ELCC
   const resourceElcc = resource === 'solar' ? elcc.solar : elcc.wind;
-  const elccMw = resourceElcc.delta * capacity / 100;
+  const displacedGasCapacityMw = resourceElcc.delta * capacity / 100;
+  const avoidedCapacityValue =
+    displacedGasCapacityMw * calculateAnnualizedGasCapacityCost(costs);
 
-  // Capacity price (use capacity market data if available, else estimate)
-  const capacityPrice = pricing.capacity_data
-    ? pricing.capacity_data.clearing_price
-    : estimateCapacityValue(costs);
+  const deliveredMwh = calculateDeliveredResourceMwh(resource, simulation);
+  const avoidedFuelValue = deliveredMwh * costs.gas_heat_rate * costs.gas_price;
 
-  // Capacity value per MWh = (ELCC MW * $/MW-yr) / annual MWh
-  const capacityValuePerMwh = (elccMw * capacityPrice) / totalGen;
-
-  return marketValue + capacityValuePerMwh;
+  return (avoidedCapacityValue + avoidedFuelValue) / totalGen;
 }
 
 /**
- * Estimate capacity value when no capacity market data available
- * Based on gas peaker cost of new entry (CONE)
+ * Assign renewable curtailment proportionally to solar and wind generation.
  */
-function estimateCapacityValue(costs: CostParams): number {
-  // Simple CONE estimate: gas capex annualized + fixed O&M
-  const annualizationFactor = costs.discount_rate / 100 /
-    (1 - Math.pow(1 + costs.discount_rate / 100, -costs.gas_lifetime));
-  const gasCapexAnnual = costs.gas_capex * 1000 * annualizationFactor;
-  const gasFixedOmAnnual = costs.gas_fixed_om * 1000;
+function calculateDeliveredResourceMwh(
+  resource: 'solar' | 'wind',
+  simulation: SimulationResult
+): number {
+  let delivered = 0;
 
-  return gasCapexAnnual + gasFixedOmAnnual; // $/MW-yr
+  for (let i = 0; i < simulation.solar_out.length; i++) {
+    const solar = simulation.solar_out[i];
+    const wind = simulation.wind_out[i];
+    const totalRenewable = solar + wind;
+    const generation = resource === 'solar' ? solar : wind;
+    const resourceCurtailment = totalRenewable > 0
+      ? simulation.curtailed[i] * generation / totalRenewable
+      : 0;
+
+    delivered += Math.max(0, generation - resourceCurtailment);
+  }
+
+  return delivered;
+}
+
+function calculateAnnualizedGasCapacityCost(costs: CostParams): number {
+  const crf = calculateCrf(costs.discount_rate / 100, costs.project_lifetime);
+  return costs.gas_capex * 1000 * crf + costs.gas_fixed_om * 1000;
+}
+
+function calculateCrf(rate: number, years: number): number {
+  if (years <= 0) return 0;
+  if (rate === 0) return 1 / years;
+  return (rate * Math.pow(1 + rate, years)) / (Math.pow(1 + rate, years) - 1);
 }
 
 /**

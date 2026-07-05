@@ -117,9 +117,9 @@ impl V3SearchConfig {
                 ),
             };
 
-    let scan_radius = parse_usize_env("V3_MONO_SCAN_RADIUS")
-        .unwrap_or(default_scan_radius)
-        .max(1);
+        let scan_radius = parse_usize_env("V3_MONO_SCAN_RADIUS")
+            .unwrap_or(default_scan_radius)
+            .max(1);
         let mut scan_threshold = parse_usize_env("V3_MONO_FULL_SCAN_THRESHOLD")
             .unwrap_or(default_scan_threshold)
             .max(scan_radius);

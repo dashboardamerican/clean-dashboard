@@ -120,7 +120,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
     label: 'Solar Market Value',
     unit: '$/MWh',
     category: 'economic_analysis',
-    description: 'Energy-weighted average price for solar generation',
+    description: 'Energy-weighted average market price earned by solar generation',
     requiresPricing: true,
   },
   {
@@ -128,7 +128,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
     label: 'Wind Market Value',
     unit: '$/MWh',
     category: 'economic_analysis',
-    description: 'Energy-weighted average price for wind generation',
+    description: 'Energy-weighted average market price earned by wind generation',
     requiresPricing: true,
   },
   {
@@ -136,18 +136,16 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
     label: 'Solar System Value',
     unit: '$/MWh',
     category: 'economic_analysis',
-    description: 'Solar value including capacity and fuel displacement',
+    description: 'Solar value from avoided gas fuel and capacity',
     requiresElcc: true,
-    requiresPricing: true,
   },
   {
     id: 'wind_system_value',
     label: 'Wind System Value',
     unit: '$/MWh',
     category: 'economic_analysis',
-    description: 'Wind value including capacity and fuel displacement',
+    description: 'Wind value from avoided gas fuel and capacity',
     requiresElcc: true,
-    requiresPricing: true,
   },
 
   // Reliability Analysis (2)

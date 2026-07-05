@@ -10,8 +10,8 @@ pub use types::{CaseReport, EvaluatedPoint, SuiteReport, V3Diagnostics, V3Result
 
 use crate::economics::calculate_lcoe;
 use crate::simulation::simulate_system;
-use crate::types::{BatteryMode, CostParams, SimulationConfig};
 use crate::types::OptimizerConfig;
+use crate::types::{BatteryMode, CostParams, SimulationConfig};
 
 pub(crate) fn build_axis(max: f64, step: f64) -> Result<Vec<f64>, String> {
     if max < 0.0 {
@@ -59,6 +59,7 @@ pub(crate) fn evaluate_clean_match(
         battery_efficiency: 0.85,
         max_demand_response: 0.0,
         battery_mode,
+        ..SimulationConfig::with_defaults()
     };
 
     let sim = simulate_system(&config, solar_profile, wind_profile, load_profile)?;
@@ -84,6 +85,7 @@ pub(crate) fn evaluate_point(
         battery_efficiency: 0.85,
         max_demand_response: 0.0,
         battery_mode,
+        ..SimulationConfig::with_defaults()
     };
 
     let sim = simulate_system(&config, solar_profile, wind_profile, load_profile)?;

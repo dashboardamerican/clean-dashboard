@@ -86,6 +86,8 @@ export interface CostParams {
   excess_power_price: number;       // $/MWh - for selling curtailed power
   monetize_excess_depreciation: boolean;  // Enable depreciation monetization
   monetization_rate: number;        // % of excess depreciation to monetize (haircut)
+  tax_loss_carryforward: boolean;   // Carry unused tax deductions forward (NOL) instead of losing them
+  self_consistent_lcoe: boolean;    // Iterate LCOE so tax revenue assumption = LCOE (break-even)
 
   // Planning reserve margin (% — e.g. 15 means built firm capacity exceeds
   // operational peak by 15%). Scales gas/CF capex and gas land in the LCOE
@@ -243,6 +245,8 @@ export const DEFAULT_COSTS: CostParams = {
   excess_power_price: 0,
   monetize_excess_depreciation: false,
   monetization_rate: 50,
+  tax_loss_carryforward: true,   // Real tax-code behavior (NOL carryforward)
+  self_consistent_lcoe: true,    // True break-even LCOE (tax revenue = LCOE)
   reserve_margin: 15,
 
   solar_lifetime: 30,

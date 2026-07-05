@@ -101,6 +101,16 @@ fn calculate_pv_energy(annual_energy: f64, project_lifetime: u32, discount_rate:
 /// * `clean_firm_capacity` - Clean firm capacity MW
 /// * `costs` - Cost parameters
 ///
+/// Price-independent annual energy sums, computed once per portfolio and shared
+/// across the break-even iteration's price samples.
+struct AnnualEnergy {
+    solar: f64,
+    wind: f64,
+    storage_throughput: f64,
+    clean_firm: f64,
+    gas: f64,
+}
+
 /// # Returns
 /// * LcoeResult with all LCOE components
 pub fn calculate_lcoe(
@@ -111,6 +121,102 @@ pub fn calculate_lcoe(
     clean_firm_capacity: f64,
     costs: &CostParams,
 ) -> LcoeResult {
+    // Annual energy sums over the 8760-hour arrays are price-independent and are
+    // by far the most expensive part of this function — compute them ONCE here,
+    // not once per price sample inside the break-even iteration.
+    let annual = AnnualEnergy {
+        solar: sim_result.solar_out.iter().sum(),
+        wind: sim_result.wind_out.iter().sum(),
+        storage_throughput: sim_result.battery_discharge.iter().sum(),
+        clean_firm: sim_result.clean_firm_generation.iter().sum(),
+        gas: sim_result.gas_generation.iter().sum(),
+    };
+
+    let mut result = calculate_lcoe_with_price(
+        sim_result,
+        solar_capacity,
+        wind_capacity,
+        storage_capacity,
+        clean_firm_capacity,
+        costs,
+        &annual,
+        costs.electricity_price,
+    );
+
+    // Break-even (self-consistent) LCOE: the revenue assumed for tax purposes
+    // should equal the price the system actually needs to charge — the LCOE
+    // itself. LCOE is affine in the assumed price wherever the tax clamp
+    // pattern is stable, so two samples determine the fixed point directly:
+    // L(p) = A + B*p  =>  p* = A / (1 - B). Verify and fall back to plain
+    // iteration only if the clamp pattern shifted between samples.
+    if costs.self_consistent_lcoe {
+        let p0 = costs.electricity_price;
+        let l0 = result.total_lcoe;
+        if (l0 - p0).abs() >= 0.01 {
+            let r1 = calculate_lcoe_with_price(
+                sim_result,
+                solar_capacity,
+                wind_capacity,
+                storage_capacity,
+                clean_firm_capacity,
+                costs,
+                &annual,
+                l0,
+            );
+            let l1 = r1.total_lcoe;
+            let denom = l0 - p0;
+            let slope = (l1 - l0) / denom;
+            let p_star = if (1.0 - slope).abs() > 1e-6 {
+                (l0 - slope * p0) / (1.0 - slope)
+            } else {
+                l1
+            };
+            let mut assumed = p_star;
+            result = calculate_lcoe_with_price(
+                sim_result,
+                solar_capacity,
+                wind_capacity,
+                storage_capacity,
+                clean_firm_capacity,
+                costs,
+                &annual,
+                assumed,
+            );
+            // Fallback iteration for the rare case the affine solve landed in a
+            // different tax-clamp regime.
+            for _ in 0..8 {
+                if (result.total_lcoe - assumed).abs() < 0.01 {
+                    break;
+                }
+                assumed = result.total_lcoe;
+                result = calculate_lcoe_with_price(
+                    sim_result,
+                    solar_capacity,
+                    wind_capacity,
+                    storage_capacity,
+                    clean_firm_capacity,
+                    costs,
+                    &annual,
+                    assumed,
+                );
+            }
+        }
+    }
+
+    result
+}
+
+#[allow(clippy::too_many_arguments)]
+fn calculate_lcoe_with_price(
+    sim_result: &SimulationResult,
+    solar_capacity: f64,
+    wind_capacity: f64,
+    storage_capacity: f64,
+    clean_firm_capacity: f64,
+    costs: &CostParams,
+    annual: &AnnualEnergy,
+    electricity_price: f64,
+) -> LcoeResult {
     let mut result = LcoeResult::default();
 
     let project_lifetime = costs.project_lifetime;
@@ -120,11 +226,11 @@ pub fn calculate_lcoe(
     let monetization_rate = costs.monetization_rate / 100.0;
 
     // === ANNUAL GENERATION VALUES ===
-    let annual_solar: f64 = sim_result.solar_out.iter().sum();
-    let annual_wind: f64 = sim_result.wind_out.iter().sum();
-    let annual_storage_throughput: f64 = sim_result.battery_discharge.iter().sum();
-    let annual_clean_firm: f64 = sim_result.clean_firm_generation.iter().sum();
-    let annual_gas: f64 = sim_result.gas_generation.iter().sum();
+    let annual_solar: f64 = annual.solar;
+    let annual_wind: f64 = annual.wind;
+    let annual_storage_throughput: f64 = annual.storage_throughput;
+    let annual_clean_firm: f64 = annual.clean_firm;
+    let annual_gas: f64 = annual.gas;
     let annual_load = sim_result.annual_load;
     let curtailed_energy = sim_result.total_curtailment;
     // Planning reserve margin scales every *firm thermal* resource that has
@@ -238,8 +344,12 @@ pub fn calculate_lcoe(
     let cf_fixed_om = cf_built_capacity * 1000.0 * costs.clean_firm_fixed_om;
     let gas_fixed_om = gas_capacity * 1000.0 * costs.gas_fixed_om;
     let ccs_fixed_om = gas_capacity * ccs_fraction * 1000.0 * costs.ccs_fixed_om;
-    let total_fixed_om =
-        solar_fixed_om + wind_fixed_om + storage_fixed_om + cf_fixed_om + gas_fixed_om + ccs_fixed_om;
+    let total_fixed_om = solar_fixed_om
+        + wind_fixed_om
+        + storage_fixed_om
+        + cf_fixed_om
+        + gas_fixed_om
+        + ccs_fixed_om;
 
     // === ANNUAL VARIABLE O&M ===
     let solar_var_om = annual_solar * costs.solar_var_om;
@@ -268,41 +378,19 @@ pub fn calculate_lcoe(
         + gas_fuel;
 
     // === REVENUE CALCULATION ===
-    let annual_revenue = annual_load * costs.electricity_price;
+    let annual_revenue = annual_load * electricity_price;
     let annual_excess_revenue = curtailed_energy * costs.excess_power_price;
 
-    // === DEPRECIATION SCHEDULES (using gross CAPEX) ===
-    let solar_depreciation = calculate_asset_depreciation(
-        solar_capex_gross,
-        costs.depreciation_method,
-        project_lifetime,
-    );
-    let wind_depreciation = calculate_asset_depreciation(
-        wind_capex_gross,
-        costs.depreciation_method,
-        project_lifetime,
-    );
-    let storage_depreciation = calculate_asset_depreciation(
-        storage_capex_gross,
-        costs.depreciation_method,
-        project_lifetime,
-    );
-    let cf_depreciation =
-        calculate_asset_depreciation(cf_capex_gross, costs.depreciation_method, project_lifetime);
-    // Use the configured depreciation method for gas to match the Python reference.
+    // === DEPRECIATION SCHEDULE (using gross CAPEX) ===
+    // Every asset uses the same (method, lifetime), and depreciation is exactly
+    // linear in capex: dep[y] = capex * rate[y]. So build ONE normalized pattern
+    // (capex = 1.0) and scale per technology in the year loop — bit-identical to
+    // building six schedules, without six Vec allocations per call.
     // (Real US tax code typically applies 15-year MACRS to gas; if you want that
-    // behavior, switch the default for `depreciation_method` to Macrs15 instead of
-    // hardcoding it here, so the choice stays driven by CostParams.)
-    let gas_depreciation = calculate_asset_depreciation(
-        gas_capex_gross,
-        costs.depreciation_method,
-        project_lifetime,
-    );
-    let ccs_depreciation = calculate_asset_depreciation(
-        ccs_capex_gross,
-        costs.depreciation_method,
-        project_lifetime,
-    );
+    // behavior, switch the default for `depreciation_method` to Macrs15 so the
+    // choice stays driven by CostParams.)
+    let depreciation_pattern =
+        calculate_asset_depreciation(1.0, costs.depreciation_method, project_lifetime);
 
     // === YEAR-BY-YEAR TAX CALCULATION (matching Python) ===
     let mut net_opex_pv = 0.0;
@@ -336,6 +424,9 @@ pub fn calculate_lcoe(
     let mut ccs_pv_fixed_om = 0.0;
     let mut ccs_pv_var_om = 0.0;
     let mut ccs_pv_dep_shield = 0.0;
+
+    // Net-operating-loss balance for the tax_loss_carryforward option.
+    let mut nol_carryforward = 0.0;
 
     for year in 0..project_lifetime {
         let inf_factor = inflation_factor(inflation_rate, year);
@@ -373,38 +464,20 @@ pub fn calculate_lcoe(
         ccs_pv_fixed_om += ccs_fixed_om * inf_factor * disc_factor;
         ccs_pv_var_om += ccs_var_om * inf_factor * disc_factor;
 
-        // Total depreciation for this year
+        // Total depreciation for this year (shared pattern scaled by capex;
+        // rate * capex is bit-identical to the per-asset schedules it replaced)
         let year_idx = year as usize;
-        let solar_dep = if year_idx < solar_depreciation.len() {
-            solar_depreciation[year_idx]
+        let pattern_rate = if year_idx < depreciation_pattern.len() {
+            depreciation_pattern[year_idx]
         } else {
             0.0
         };
-        let wind_dep = if year_idx < wind_depreciation.len() {
-            wind_depreciation[year_idx]
-        } else {
-            0.0
-        };
-        let storage_dep = if year_idx < storage_depreciation.len() {
-            storage_depreciation[year_idx]
-        } else {
-            0.0
-        };
-        let cf_dep = if year_idx < cf_depreciation.len() {
-            cf_depreciation[year_idx]
-        } else {
-            0.0
-        };
-        let gas_dep = if year_idx < gas_depreciation.len() {
-            gas_depreciation[year_idx]
-        } else {
-            0.0
-        };
-        let ccs_dep = if year_idx < ccs_depreciation.len() {
-            ccs_depreciation[year_idx]
-        } else {
-            0.0
-        };
+        let solar_dep = pattern_rate * solar_capex_gross;
+        let wind_dep = pattern_rate * wind_capex_gross;
+        let storage_dep = pattern_rate * storage_capex_gross;
+        let cf_dep = pattern_rate * cf_capex_gross;
+        let gas_dep = pattern_rate * gas_capex_gross;
+        let ccs_dep = pattern_rate * ccs_capex_gross;
         let total_dep = solar_dep + wind_dep + storage_dep + cf_dep + gas_dep + ccs_dep;
 
         // Taxable income before depreciation
@@ -447,7 +520,23 @@ pub fn calculate_lcoe(
         }
 
         // Taxable income after depreciation
-        let taxable_income = taxable_before_dep - applied_depreciation;
+        let mut taxable_income = taxable_before_dep - applied_depreciation;
+
+        // NOL carryforward: unused deductions (negative taxable income) roll
+        // forward to offset later years' income instead of vanishing. Matches
+        // real tax-code behavior; without it LCOE has a kink in capex space and
+        // technologies' marginal costs contaminate each other through the
+        // shared income ceiling (optimizer_research F24/F25).
+        if costs.tax_loss_carryforward {
+            if taxable_income < 0.0 {
+                nol_carryforward -= taxable_income;
+                taxable_income = 0.0;
+            } else if nol_carryforward > 0.0 {
+                let used = taxable_income.min(nol_carryforward);
+                taxable_income -= used;
+                nol_carryforward -= used;
+            }
+        }
 
         // Tax payment (only on positive taxable income)
         let tax_payment = taxable_income.max(0.0) * tax_rate;
@@ -493,8 +582,7 @@ pub fn calculate_lcoe(
             cf_effective_capex + cf_pv_fixed_om + cf_pv_var_om + cf_pv_fuel - cf_pv_dep_shield;
         let gas_pv_cost =
             gas_effective_capex + gas_pv_fixed_om + gas_pv_var_om + gas_pv_fuel - gas_pv_dep_shield;
-        let ccs_pv_cost =
-            ccs_effective_capex + ccs_pv_fixed_om + ccs_pv_var_om - ccs_pv_dep_shield;
+        let ccs_pv_cost = ccs_effective_capex + ccs_pv_fixed_om + ccs_pv_var_om - ccs_pv_dep_shield;
 
         result.solar_lcoe = solar_pv_cost / pv_energy;
         result.wind_lcoe = wind_pv_cost / pv_energy;
@@ -590,8 +678,8 @@ pub fn calculate_lcoe(
     let cf_embodied = annual_clean_firm * costs.clean_firm_embodied_emissions;
     // storage_capacity is in MWh; battery_embodied_emissions is kg CO2eq per kWh,
     // so multiply by 1000 to land in kg/year of amortized embodied emissions.
-    let battery_embodied = storage_capacity * 1000.0 * costs.battery_embodied_emissions
-        / project_lifetime as f64;
+    let battery_embodied =
+        storage_capacity * 1000.0 * costs.battery_embodied_emissions / project_lifetime as f64;
 
     let total_emissions = gas_combustion
         + methane_emissions
@@ -704,6 +792,76 @@ mod tests {
         let lcoe_with_itc = calculate_lcoe(&sim_result, 100.0, 0.0, 0.0, 0.0, &costs_with_itc);
 
         assert!(lcoe_with_itc.solar_lcoe < lcoe_no_itc.solar_lcoe);
+    }
+
+    #[test]
+    fn test_tax_loss_carryforward() {
+        let sim_result = create_test_sim_result();
+
+        // The clamp binds when early-year MACRS depreciation exceeds taxable
+        // income but later years turn positive (so carried losses get used).
+        // The revenue level where that happens depends on the fixture, so scan
+        // a range: carryforward must NEVER hurt, and must strictly help for at
+        // least one revenue level.
+        let mut helped_somewhere = false;
+        for price in [30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0] {
+            let mut costs_clamped = CostParams::default_costs();
+            costs_clamped.electricity_price = price;
+            costs_clamped.tax_loss_carryforward = false;
+            costs_clamped.self_consistent_lcoe = false;
+            let mut costs_carryforward = costs_clamped.clone();
+            costs_carryforward.tax_loss_carryforward = true;
+
+            let base = calculate_lcoe(&sim_result, 100.0, 100.0, 50.0, 10.0, &costs_clamped);
+            let carried =
+                calculate_lcoe(&sim_result, 100.0, 100.0, 50.0, 10.0, &costs_carryforward);
+
+            assert!(
+                carried.total_lcoe <= base.total_lcoe + 1e-9,
+                "carryforward raised LCOE at price {}: {} vs {}",
+                price,
+                carried.total_lcoe,
+                base.total_lcoe
+            );
+            if carried.total_lcoe < base.total_lcoe - 1e-6 {
+                helped_somewhere = true;
+            }
+        }
+        assert!(
+            helped_somewhere,
+            "carryforward never had any effect across the revenue scan"
+        );
+    }
+
+    #[test]
+    fn test_self_consistent_lcoe() {
+        let sim_result = create_test_sim_result();
+
+        let mut costs_plain = CostParams::default_costs();
+        costs_plain.self_consistent_lcoe = false;
+        let mut costs_sc = costs_plain.clone();
+        costs_sc.self_consistent_lcoe = true;
+
+        let plain = calculate_lcoe(&sim_result, 100.0, 100.0, 50.0, 10.0, &costs_plain);
+        let sc = calculate_lcoe(&sim_result, 100.0, 100.0, 50.0, 10.0, &costs_sc);
+
+        assert!(sc.total_lcoe.is_finite() && sc.total_lcoe > 0.0);
+        // Verify it is a fixed point: recomputing with the converged price as
+        // the revenue assumption reproduces the same LCOE.
+        let mut costs_fixed = costs_plain.clone();
+        costs_fixed.electricity_price = sc.total_lcoe;
+        let re = calculate_lcoe(&sim_result, 100.0, 100.0, 50.0, 10.0, &costs_fixed);
+        assert!(
+            (re.total_lcoe - sc.total_lcoe).abs() < 0.02,
+            "not a fixed point: {} vs {}",
+            re.total_lcoe,
+            sc.total_lcoe
+        );
+        // If the true LCOE exceeds the $50 default revenue assumption, the
+        // break-even version pays more tax and must be >= the plain version.
+        if plain.total_lcoe > costs_plain.electricity_price {
+            assert!(sc.total_lcoe >= plain.total_lcoe - 1e-9);
+        }
     }
 
     #[test]
@@ -844,8 +1002,16 @@ mod tests {
         // Capex line items scale exactly 1.15× — single-multiplier path.
         let gas_ratio = with_res.gas_breakdown.capex / no_res.gas_breakdown.capex;
         let cf_ratio = with_res.clean_firm_breakdown.capex / no_res.clean_firm_breakdown.capex;
-        assert!((gas_ratio - 1.15).abs() < 1e-6, "gas capex 1.15× expected, got {}", gas_ratio);
-        assert!((cf_ratio - 1.15).abs() < 1e-6, "CF capex 1.15× expected, got {}", cf_ratio);
+        assert!(
+            (gas_ratio - 1.15).abs() < 1e-6,
+            "gas capex 1.15× expected, got {}",
+            gas_ratio
+        );
+        assert!(
+            (cf_ratio - 1.15).abs() < 1e-6,
+            "CF capex 1.15× expected, got {}",
+            cf_ratio
+        );
 
         // Variable resources (solar, wind, storage) are NOT scaled — their
         // reliability discount lives in capacity factor / ELCC, not here.

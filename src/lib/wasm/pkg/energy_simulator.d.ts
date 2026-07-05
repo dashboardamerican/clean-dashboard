@@ -65,6 +65,12 @@ export class CostParams {
     monetize_excess_depreciation: boolean;
     project_lifetime: number;
     reserve_margin: number;
+    /**
+     * Iterate the LCOE so the revenue assumed for tax purposes equals the
+     * resulting LCOE (true break-even LCOE) instead of fixed electricity_price.
+     * Default ON (honest break-even number); set false for legacy behavior.
+     */
+    self_consistent_lcoe: boolean;
     solar_capex: number;
     solar_embodied_emissions: number;
     solar_fixed_om: number;
@@ -77,6 +83,12 @@ export class CostParams {
     storage_itc: number;
     storage_lifetime: number;
     storage_var_om: number;
+    /**
+     * Carry unused tax deductions forward to later years (NOL carryforward)
+     * instead of letting them vanish when depreciation exceeds taxable income.
+     * Default ON (real tax-code behavior); set false for legacy/Python parity.
+     */
+    tax_loss_carryforward: boolean;
     tax_rate: number;
     wind_capex: number;
     wind_embodied_emissions: number;
@@ -917,6 +929,7 @@ export interface InitOutput {
     readonly __wbg_get_costparams_monetize_excess_depreciation: (a: number) => number;
     readonly __wbg_get_costparams_project_lifetime: (a: number) => number;
     readonly __wbg_get_costparams_reserve_margin: (a: number) => number;
+    readonly __wbg_get_costparams_self_consistent_lcoe: (a: number) => number;
     readonly __wbg_get_costparams_solar_capex: (a: number) => number;
     readonly __wbg_get_costparams_solar_embodied_emissions: (a: number) => number;
     readonly __wbg_get_costparams_solar_fixed_om: (a: number) => number;
@@ -929,6 +942,7 @@ export interface InitOutput {
     readonly __wbg_get_costparams_storage_itc: (a: number) => number;
     readonly __wbg_get_costparams_storage_lifetime: (a: number) => number;
     readonly __wbg_get_costparams_storage_var_om: (a: number) => number;
+    readonly __wbg_get_costparams_tax_loss_carryforward: (a: number) => number;
     readonly __wbg_get_costparams_tax_rate: (a: number) => number;
     readonly __wbg_get_costparams_wind_capex: (a: number) => number;
     readonly __wbg_get_costparams_wind_embodied_emissions: (a: number) => number;
@@ -996,6 +1010,7 @@ export interface InitOutput {
     readonly __wbg_set_costparams_monetize_excess_depreciation: (a: number, b: number) => void;
     readonly __wbg_set_costparams_project_lifetime: (a: number, b: number) => void;
     readonly __wbg_set_costparams_reserve_margin: (a: number, b: number) => void;
+    readonly __wbg_set_costparams_self_consistent_lcoe: (a: number, b: number) => void;
     readonly __wbg_set_costparams_solar_capex: (a: number, b: number) => void;
     readonly __wbg_set_costparams_solar_embodied_emissions: (a: number, b: number) => void;
     readonly __wbg_set_costparams_solar_fixed_om: (a: number, b: number) => void;
@@ -1008,6 +1023,7 @@ export interface InitOutput {
     readonly __wbg_set_costparams_storage_itc: (a: number, b: number) => void;
     readonly __wbg_set_costparams_storage_lifetime: (a: number, b: number) => void;
     readonly __wbg_set_costparams_storage_var_om: (a: number, b: number) => void;
+    readonly __wbg_set_costparams_tax_loss_carryforward: (a: number, b: number) => void;
     readonly __wbg_set_costparams_tax_rate: (a: number, b: number) => void;
     readonly __wbg_set_costparams_wind_capex: (a: number, b: number) => void;
     readonly __wbg_set_costparams_wind_embodied_emissions: (a: number, b: number) => void;

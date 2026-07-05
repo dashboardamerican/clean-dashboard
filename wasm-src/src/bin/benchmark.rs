@@ -59,6 +59,22 @@ fn main() {
             20.0,
             BatteryMode::Hybrid,
         ),
+        (
+            "Limited Forecast mode",
+            100.0,
+            100.0,
+            100.0,
+            20.0,
+            BatteryMode::LimitedForecast,
+        ),
+        (
+            "California test portfolio (Limited Forecast)",
+            180.0,
+            90.0,
+            120.0,
+            0.0,
+            BatteryMode::LimitedForecast,
+        ),
     ];
 
     println!("\n{}", "=".repeat(60));
@@ -100,11 +116,17 @@ fn main() {
         let median = times[times.len() / 2];
         let min = times[0];
         let max = times[times.len() - 1];
+        let result = simulate_system(&config, &solar, &wind, &load).unwrap();
+        let gas_mwh: f64 = result.gas_generation.iter().sum();
 
         println!("  Mean:   {:.3} ms", mean);
         println!("  Median: {:.3} ms", median);
         println!("  Min:    {:.3} ms", min);
         println!("  Max:    {:.3} ms", max);
+        println!("  Clean:  {:.2}%", result.clean_match_pct);
+        println!("  Gas:    {:.0} MWh", gas_mwh);
+        println!("  Peak:   {:.1} MW", result.peak_gas);
+        println!("  Curtail:{:.0} MWh", result.total_curtailment);
     }
 
     // Also test LCOE calculation

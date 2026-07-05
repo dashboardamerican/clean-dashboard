@@ -164,6 +164,7 @@ fn run_comparison(
         battery_efficiency: config.battery_eff,
         max_demand_response: config.max_demand_response,
         battery_mode: mode,
+        ..SimulationConfig::with_defaults()
     };
 
     // Run Rust simulation

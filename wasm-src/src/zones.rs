@@ -89,7 +89,9 @@ pub struct ZoneProfiles {
 /// Parse the bytes of `zones.json` (as shipped in `public/data/`) into
 /// per-zone profile maps. Returns a clear error on missing zones, wrong
 /// shape, or 8760-length mismatches.
-pub fn parse_zones_json(bytes: &[u8]) -> Result<std::collections::HashMap<String, ZoneProfiles>, String> {
+pub fn parse_zones_json(
+    bytes: &[u8],
+) -> Result<std::collections::HashMap<String, ZoneProfiles>, String> {
     let map: std::collections::HashMap<String, ZoneProfiles> =
         serde_json::from_slice(bytes).map_err(|e| format!("zones.json parse error: {}", e))?;
 

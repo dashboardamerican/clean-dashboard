@@ -409,6 +409,7 @@ fn run_simulation(
         battery_efficiency: 0.85,
         max_demand_response: 0.0,
         battery_mode: mode,
+        ..SimulationConfig::with_defaults()
     };
 
     match simulate_system(
